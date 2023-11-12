@@ -2,12 +2,13 @@ const express = require("express");
 const mongoose = require("mongoose");
 const cors = require("cors");
 const app = express();
+const FoodRouter = require("./routers/food");
 require("dotenv").config();
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-app.use(require("./routers/food"));
+app.use(FoodRouter);
 app.use(cors());
 
 mongoose
