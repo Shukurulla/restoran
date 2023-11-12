@@ -9,6 +9,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 app.use(FoodRouter);
+app.use(require("./routers/category"));
 app.use(cors());
 
 mongoose
