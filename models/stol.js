@@ -1,6 +1,6 @@
 const mongoose = require("mongoose");
 
-const Stol = mongoose.model("Stol", {
+const StolSchema = mongoose.Schema({
   title: {
     type: String,
     required: true,
@@ -9,5 +9,7 @@ const Stol = mongoose.model("Stol", {
     type: String,
   },
 });
+
+const Stol = mongoose.model("Stol", StolSchema);
 
 module.exports = Stol;
