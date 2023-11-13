@@ -2,7 +2,7 @@ const mongoose = require("mongoose");
 
 const foodSchema = mongoose.Schema({
   image: {
-    type: Object,
+    type: String,
     required: true,
   },
   foodName: {
