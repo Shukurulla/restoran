@@ -8,7 +8,7 @@ router.get("/foods", cors(), async (req, res) => {
   res.json({ data: foods });
 });
 
-router.post("/foods", cors(), async (req, res) => {
+router.post("/foods-create", cors(), async (req, res) => {
   await Food.create(req.body);
   const foods = await Food.find();
   res.json({ data: foods });
