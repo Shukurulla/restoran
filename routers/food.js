@@ -9,14 +9,7 @@ router.get("/foods", cors(), async (req, res) => {
 });
 
 router.post("/foods-create", cors(), async (req, res) => {
-  const file = new FileReader();
-  let url = "";
-  file.addEventListener("load", () => {
-    url = file.result;
-  });
-  file.readAsDataURL(req.body.image);
-
-  await Food.create({ ...req.body, image: url });
+  await Food.create(req.body);
   const foods = await Food.find();
   res.json({ data: foods });
 });
