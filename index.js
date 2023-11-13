@@ -12,7 +12,7 @@ app.use(FoodRouter);
 app.use(require("./routers/category"));
 app.use(
   cors({
-    origin: "https://restoran-service.onrender.com",
+    origin: "*",
     optionsSuccessStatus: 200,
     credentials: true,
   })
