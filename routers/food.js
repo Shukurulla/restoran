@@ -9,7 +9,8 @@ router.get("/foods", cors(), async (req, res) => {
 });
 
 router.post("/foods-create", cors(), async (req, res) => {
-  await Food.create(req.body);
+  const link = btoa(req.body.image);
+  await Food.create({ ...req.body, image: link });
   const foods = await Food.find();
   res.json({ data: foods });
 });
