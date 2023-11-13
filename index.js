@@ -4,7 +4,6 @@ const cors = require("cors");
 const app = express();
 const FoodRouter = require("./routers/food");
 require("dotenv").config();
-const cors = require("cors");
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -13,7 +12,7 @@ app.use(FoodRouter);
 app.use(require("./routers/category"));
 app.use(
   cors({
-    origin: "*",
+    origin: "https://restoran-service.onrender.com",
     optionsSuccessStatus: 200,
     credentials: true,
   })
