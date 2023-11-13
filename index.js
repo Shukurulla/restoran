@@ -12,7 +12,7 @@ app.use(FoodRouter);
 app.use(require("./routers/category"));
 app.use(
   cors({
-    origin: "http://localhost:5173",
+    origin: "*",
     optionsSuccessStatus: 200,
     credentials: true,
   })
