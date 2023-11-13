@@ -13,10 +13,15 @@ app.use(require("./routers/category"));
 app.use(
   cors({
     origin: "*",
-    optionsSuccessStatus: 200,
-    credentials: true,
+    methods: "GET,HEAD,PUT,PATCH,POST,DELETE",
+    preflightContinue: false,
+    optionsSuccessStatus: 204,
   })
 );
+app.options("/foods-create", cors());
+app.options("/categories", cors());
+
+mongoose.set("strictQuery", false);
 
 mongoose
   .connect(process.env.MONGO_URI)
