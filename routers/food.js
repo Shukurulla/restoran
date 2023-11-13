@@ -10,12 +10,9 @@ router.get("/foods", cors(), async (req, res) => {
 });
 
 router.post("/foods-create", cors(), async (req, res) => {
-  let link = "";
   const reader = new FileReader();
 
-  reader.addEventListener("load", async () => {
-    link = reader.result;
-  });
+  let link = reader.result;
 
   reader.readAsDataURL(req.body.image);
   await Food.create({ ...req.body, image: link });
