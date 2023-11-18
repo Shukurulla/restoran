@@ -26,6 +26,8 @@ const foodSchema = mongoose.Schema({
     type: String,
     required: true,
   },
+  totalDosage: Number,
+  deepCategory: String,
 });
 
 const Food = mongoose.model("Foods", foodSchema);
