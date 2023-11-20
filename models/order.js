@@ -1,25 +1,28 @@
 const mongoose = require("mongoose");
 
 const orderSchema = mongoose.Schema({
-  title: {
-    type: String,
+  orderedAt: {
+    type: Date,
     required: true,
+    default: new Date(),
   },
-  location: {
-    lat: {
-      type: String,
-      required: true,
-    },
-    lon: {
-      type: String,
-      required: true,
-    },
-  },
-  table: {
+  allOrders: {
     type: Object,
     required: true,
   },
-  orderDate: {
+  selectFoods: {
+    type: Object,
+    required: true,
+  },
+  location: {
+    type: Object,
+    required: true,
+  },
+  tableId: {
+    type: String,
+    required: true,
+  },
+  totalPrice: {
     type: String,
     required: true,
   },
