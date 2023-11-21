@@ -7,6 +7,7 @@ const saveOrderSchema = mongoose.Schema({
   },
   clientName: String,
   clientPhone: String,
+  assurance: String,
   status: {
     type: String,
     required: true,
