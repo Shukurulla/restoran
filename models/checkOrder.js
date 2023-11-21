@@ -1,0 +1,17 @@
+const mongoose = require("mongoose");
+
+const saveOrderSchema = mongoose.Schema({
+  order: {
+    type: Object,
+    required: true,
+  },
+  clientName: String,
+  clientPhone: String,
+  status: {
+    type: String,
+    required: true,
+  },
+});
+
+const SaveOrder = mongoose.model("SaveOrders", saveOrderSchema);
+module.exports = SaveOrder;

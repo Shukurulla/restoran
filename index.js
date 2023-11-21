@@ -27,6 +27,7 @@ app.use(require("./routers/food"));
 app.use(require("./routers/dosage"));
 app.use(require("./routers/table"));
 app.use(require("./routers/order"));
+app.use(require("./routers/saveOrders"));
 
 app.use(express.static("public"));
 
