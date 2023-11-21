@@ -26,6 +26,11 @@ const orderSchema = mongoose.Schema({
     type: String,
     required: true,
   },
+  isNew: {
+    type: Boolean,
+    required: true,
+    default: true,
+  },
 });
 
 const Order = mongoose.model("Orders", orderSchema);
