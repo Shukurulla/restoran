@@ -32,6 +32,8 @@ app.use(require("./routers/saveOrders"));
 app.use(express.static("public"));
 
 app.get("/", (req, res) => {
+  const ip = req.ip;
+  res.json({ ip });
   res.json({ data: "Hello World" });
 });
 
