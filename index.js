@@ -4,6 +4,7 @@ const cors = require("cors");
 const mongoose = require("mongoose");
 const expressip = require("express-ip");
 var useragent = require("express-useragent");
+const Order = require("./models/order");
 
 require("dotenv").config();
 // enable cors
@@ -39,10 +40,20 @@ app.get("/", (req, res) => {
   res.json({
     ip: req.ipInfo,
     data: "Hello World",
-    agent: req.useragent.source,
+
+    agent: req.useragent.geoIp,
   });
 });
 
+app.post("/orders", cors(), async (req, res) => {
+  console.log(req.body);
+  await Order.create({
+    ...req.body,
+    agent: { ipAddress: req.ipInfo },
+  });
+  const orders = await Order.find();
+  res.json({ data: orders });
+});
 app.listen(process.env.PORT, () => {
   console.log("server has ben started");
 });

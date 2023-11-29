@@ -31,7 +31,7 @@ const orderSchema = mongoose.Schema({
     required: true,
   },
   isNew: {
-    type: Boolean,
+    type: String,
     default: true,
   },
 });
