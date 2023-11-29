@@ -36,9 +36,11 @@ app.use(useragent.express());
 app.use(express.static("public"));
 
 app.get("/", (req, res) => {
-  res.json({ ip: req.ipInfo });
-  res.send(req.useragent);
-  res.json({ data: "Hello World" });
+  res.json({
+    ip: req.ipInfo,
+    data: "Hello World",
+    agent: req.useragent.source,
+  });
 });
 
 app.listen(process.env.PORT, () => {
