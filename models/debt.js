@@ -17,6 +17,10 @@ const debtSchema = mongoose.Schema({
     type: String,
     required: true,
   },
+  orders: {
+    type: Object,
+    require: true,
+  },
 });
 
 const Dedt = mongoose.model("debd", debtSchema);
