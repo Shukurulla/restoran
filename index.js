@@ -2,6 +2,7 @@ const express = require("express");
 const app = express();
 const cors = require("cors");
 const mongoose = require("mongoose");
+const expressip = require("express-ip");
 
 require("dotenv").config();
 // enable cors
@@ -19,6 +20,7 @@ mongoose.connect(process.env.MONGO_URI).then((res) => {
 
 mongoose.set("strictQuery", false);
 
+app.use(expressip().getIpInfoMiddleware);
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -33,8 +35,7 @@ app.use(require("./routers/debt"));
 app.use(express.static("public"));
 
 app.get("/", (req, res) => {
-  const ip = req.socket.remoteAddress;
-  res.json({ ip });
+  res.json({ ip: req.ipInfo });
   res.json({ data: "Hello World" });
 });
 
