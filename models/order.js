@@ -14,7 +14,7 @@ const orderSchema = mongoose.Schema({
     type: Object,
     required: true,
   },
-  location: {
+  agent: {
     type: Object,
     required: true,
   },
@@ -32,7 +32,6 @@ const orderSchema = mongoose.Schema({
   },
   isNew: {
     type: Boolean,
-    required: true,
     default: true,
   },
 });
