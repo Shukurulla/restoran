@@ -3,6 +3,7 @@ const app = express();
 const cors = require("cors");
 const mongoose = require("mongoose");
 const expressip = require("express-ip");
+var useragent = require("express-useragent");
 
 require("dotenv").config();
 // enable cors
@@ -31,11 +32,12 @@ app.use(require("./routers/table"));
 app.use(require("./routers/order"));
 app.use(require("./routers/saveOrders"));
 app.use(require("./routers/debt"));
-
+app.use(useragent.express());
 app.use(express.static("public"));
 
 app.get("/", (req, res) => {
   res.json({ ip: req.ipInfo });
+  res.send(req.useragent);
   res.json({ data: "Hello World" });
 });
 

@@ -8,7 +8,7 @@ router.get("/orders", cors(), async (req, res) => {
   res.json({ data: orders });
 });
 router.post("/orders", cors(), async (req, res) => {
-  await Order.create(req.body);
+  await Order.create({ ...req.body, agent: { ip: req.ipInfo } });
   const orders = await Order.find();
   res.json({ data: orders });
 });
