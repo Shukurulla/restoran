@@ -19,8 +19,6 @@ router.post("/edit-debt/:id", cors(), async (req, res) => {
 });
 router.post("/delete-debt/:id", cors(), async (req, res) => {
   await Dedt.findByIdAndRemove(req.params.id);
-  const debt = await Dedt.find();
-  res.json({ data: debt });
 });
 
 module.exports = router;
