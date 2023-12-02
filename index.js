@@ -34,16 +34,9 @@ app.use(require("./routers/order"));
 app.use(require("./routers/saveOrders"));
 app.use(require("./routers/debt"));
 app.use(useragent.express());
-app.use(express.static("public"));
+app.use(express.static("./public"));
 
-app.get("/", (req, res) => {
-  res.json({
-    ip: req.ipInfo,
-    data: "Hello World",
-
-    agent: req.useragent.geoIp,
-  });
-});
+app.get("/", (req, res) => {});
 
 app.post("/orders", cors(), async (req, res) => {
   console.log(req.body);
