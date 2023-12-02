@@ -34,7 +34,11 @@ app.use(require("./routers/order"));
 app.use(require("./routers/saveOrders"));
 app.use(require("./routers/debt"));
 app.use(useragent.express());
-app.use(express.static(__dirname + "/public"));
+app.configure(function () {
+  app.set("view options", { layout: false });
+
+  app.use(express.static(__dirname + "/public"));
+});
 
 app.get("/", (req, res) => {});
 
