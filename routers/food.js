@@ -34,6 +34,7 @@ router.post(
     await Food.create({ ...req.body, image: req.file.filename });
     const foods = await Food.find();
     res.json({ data: foods });
+    console.log(req.body);
   }
 );
 router.post(
