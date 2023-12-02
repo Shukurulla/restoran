@@ -35,11 +35,7 @@ app.use(require("./routers/saveOrders"));
 app.use(require("./routers/debt"));
 app.use(useragent.express());
 
-app.configure(function () {
-  app.set("view options", { layout: false });
-
-  app.use(express.static(__dirname + "/public"));
-});
+app.use(express.static(__dirname + "/public"));
 app.get("/", (req, res) => {});
 
 app.post("/orders", cors(), async (req, res) => {
