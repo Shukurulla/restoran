@@ -44,18 +44,6 @@ app.post("/orders", cors(), async (req, res) => {
   res.json({ data: orders });
 });
 
-app.post("/foods-create", cors(), async (req, res) => {
-  const { file } = req.files;
-  await file.mv(
-    path.resolve(__dirname, "public/Images", file.name),
-    async (err) => {
-      await Foods.create({ ...req.body, image: file.name });
-      const foods = await Foods.find();
-      res.json({ data: foods });
-    }
-  );
-});
-
 app.listen(process.env.PORT, () => {
   console.log("server has ben started");
 });
