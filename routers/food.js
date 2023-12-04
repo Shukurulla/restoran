@@ -17,12 +17,7 @@ router.post("/foods-create", cors(), async (req, res) => {
 
 router.post("/edit-food/:id", cors(), async (req, res) => {
   const id = req.params.id;
-  await Food.findByIdAndUpdate(
-    id,
-    req.body.isEdit == true
-      ? { ...req.body, image: req.file.filename }
-      : req.body
-  );
+  await Food.findByIdAndUpdate(id, req.body);
   const data = await Food.find();
   res.json({ data: data });
   console.log(req.files);
