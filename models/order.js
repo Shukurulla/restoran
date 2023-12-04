@@ -16,7 +16,6 @@ const orderSchema = mongoose.Schema({
   },
   agent: {
     type: Object,
-    required: true,
   },
   tableId: {
     type: String,
