@@ -2,9 +2,8 @@ const express = require("express");
 const app = express();
 const cors = require("cors");
 const mongoose = require("mongoose");
-const Order = require("../models/order");
+const Order = require("./models/order");
 const fileUpload = require("express-fileupload");
-i8;
 const serverless = require("serverless-http");
 
 require("dotenv").config();
@@ -26,14 +25,14 @@ mongoose.set("strictQuery", false);
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-app.use(require("../routers/category"));
-app.use(require("../routers/food"));
-app.use(require("../routers/dosage"));
-app.use(require("../routers/table"));
-app.use(require("../routers/order"));
-app.use(require("../routers/saveOrders"));
-app.use(require("../routers/debt"));
-app.use(require("../routers/service"));
+app.use(require("./routers/category"));
+app.use(require("./routers/food"));
+app.use(require("./routers/dosage"));
+app.use(require("./routers/table"));
+app.use(require("./routers/order"));
+app.use(require("./routers/saveOrders"));
+app.use(require("./routers/debt"));
+app.use(require("./routers/service"));
 app.use(fileUpload());
 
 app.use(express.static("public"));
