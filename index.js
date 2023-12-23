@@ -37,9 +37,7 @@ app.use(fileUpload());
 
 app.use(express.static("public"));
 
-const router = express.Router();
-
-router.post("/orders", cors(), async (req, res) => {
+app.post("/orders", cors(), async (req, res) => {
   await Order.create(req.body);
   const orders = await Order.find();
   res.json({ data: orders });
