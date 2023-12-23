@@ -4,7 +4,6 @@ const cors = require("cors");
 const mongoose = require("mongoose");
 const Order = require("./models/order");
 const fileUpload = require("express-fileupload");
-const serverless = require("serverless-http");
 
 require("dotenv").config();
 // enable cors
@@ -43,10 +42,6 @@ app.post("/orders", cors(), async (req, res) => {
   res.json({ data: orders });
 });
 
-app.use("/.netlify/functions/api", router);
-
 app.listen(process.env.PORT, () => {
   console.log("server has ben started");
 });
-
-module.exports.handler = serverless(app);
