@@ -34,6 +34,10 @@ const orderSchema = mongoose.Schema({
     type: String,
     default: true,
   },
+  discount: {
+    type: Boolean,
+    required: true,
+  },
 });
 
 const Order = mongoose.model("Orders", orderSchema);
