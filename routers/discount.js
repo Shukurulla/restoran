@@ -24,4 +24,18 @@ router.post("/delete-discount/:id", cors(), async (req, res) => {
   res.json({ data: discount });
 });
 
+const hour = new Date().getHours();
+
+if (hour > 12 && hour < 15) {
+  router.post("/edit-discount/6587ce2b73cf78a2f2018f77", {
+    title: "Tushlik uchun chegirma",
+    discount: 10,
+  });
+} else {
+  router.post("/edit-discount/6587ce2b73cf78a2f2018f77", {
+    title: "Tushlik uchun chegirma",
+    discount: 0,
+  });
+}
+
 module.exports = router;
