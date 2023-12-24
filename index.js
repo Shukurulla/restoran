@@ -32,6 +32,7 @@ app.use(require("./routers/order"));
 app.use(require("./routers/saveOrders"));
 app.use(require("./routers/debt"));
 app.use(require("./routers/service"));
+app.use(require("./routers/discount"));
 app.use(fileUpload());
 
 app.use(express.static("public"));
