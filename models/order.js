@@ -38,6 +38,9 @@ const orderSchema = mongoose.Schema({
     type: Boolean,
     required: true,
   },
+  userInfo: {
+    type: Object,
+  },
 });
 
 const Order = mongoose.model("Orders", orderSchema);
