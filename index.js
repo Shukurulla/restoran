@@ -34,6 +34,7 @@ app.use(require("./routers/saveOrders"));
 app.use(require("./routers/debt"));
 app.use(require("./routers/service"));
 app.use(require("./routers/discount"));
+app.use(require("./routers/saved"));
 app.use(fileUpload());
 
 app.use(express.static("public"));
@@ -44,8 +45,6 @@ app.post("/orders", cors(), async (req, res) => {
   res.json({ data: orders });
 });
 const hour = new Date().getHours();
-console.log(hour);
-
 if (hour > 11 && hour <= 15) {
   axios.post(
     "https://restoran-service.onrender.com/edit-discount/6587ce2b73cf78a2f2018f77",
