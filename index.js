@@ -43,6 +43,20 @@ app.post("/orders", cors(), async (req, res) => {
   res.json({ data: orders });
 });
 
+const hour = new Date().getHours();
+
+if (hour > 12 && hour < 15) {
+  app.post("/edit-discount/6587ce2b73cf78a2f2018f77", {
+    title: "Tushlik uchun chegirma",
+    discount: 10,
+  });
+} else {
+  app.post("/edit-discount/6587ce2b73cf78a2f2018f77", {
+    title: "Tushlik uchun chegirma",
+    discount: 0,
+  });
+}
+
 app.listen(process.env.PORT, () => {
   console.log("server has ben started");
 });
