@@ -4,6 +4,7 @@ const cors = require("cors");
 const mongoose = require("mongoose");
 const Order = require("./models/order");
 const fileUpload = require("express-fileupload");
+const axios = require("axios");
 
 require("dotenv").config();
 // enable cors
@@ -42,19 +43,24 @@ app.post("/orders", cors(), async (req, res) => {
   const orders = await Order.find();
   res.json({ data: orders });
 });
-
 const hour = new Date().getHours();
 
 if (hour > 12 && hour < 15) {
-  app.post("/edit-discount/6587ce2b73cf78a2f2018f77", {
-    title: "Tushlik uchun chegirma",
-    discount: 10,
-  });
+  axios.post(
+    "https://restoran-service.onrender.com/edit-discount/6587ce2b73cf78a2f2018f77",
+    {
+      title: "Tushlik uchun chegirma",
+      discount: 10,
+    }
+  );
 } else {
-  app.post("/edit-discount/6587ce2b73cf78a2f2018f77", {
-    title: "Tushlik uchun chegirma",
-    discount: 0,
-  });
+  axios.post(
+    "https://restoran-service.onrender.com/edit-discount/6587ce2b73cf78a2f2018f77",
+    {
+      title: "Tushlik uchun chegirma",
+      discount: 0,
+    }
+  );
 }
 
 app.listen(process.env.PORT, () => {
