@@ -5,6 +5,7 @@ const Saved = mongoose.model("Saved", {
     type: Object,
     required: true,
   },
+  tableId: String,
 });
 
 module.exports = Saved;
