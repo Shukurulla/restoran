@@ -9,7 +9,7 @@ const tableSchema = mongoose.Schema({
     type: Number,
     required: true,
   },
-  fodDJ: {
+  forDJ: {
     type: Boolean,
     required: true,
   },
