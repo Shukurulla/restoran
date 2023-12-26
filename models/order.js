@@ -41,6 +41,10 @@ const orderSchema = mongoose.Schema({
   userInfo: {
     type: Object,
   },
+  surcharge: {
+    type: Number,
+    required: true,
+  },
 });
 
 const Order = mongoose.model("Orders", orderSchema);
