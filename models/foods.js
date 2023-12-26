@@ -28,6 +28,8 @@ const foodSchema = mongoose.Schema({
   },
   totalDosage: Number,
   deepCategory: String,
+  orderMusic: Object,
+  karaoke: Boolean,
 });
 
 const Food = mongoose.model("Foods", foodSchema);

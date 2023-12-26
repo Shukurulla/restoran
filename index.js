@@ -35,6 +35,7 @@ app.use(require("./routers/debt"));
 app.use(require("./routers/service"));
 app.use(require("./routers/discount"));
 app.use(require("./routers/saved"));
+app.use(require("./routers/service-dj"));
 app.use(fileUpload());
 
 app.use(express.static("public"));
@@ -44,27 +45,6 @@ app.post("/orders", cors(), async (req, res) => {
   const orders = await Order.find();
   res.json({ data: orders });
 });
-const hour = new Date().getHours();
-if (hour > 11 && hour < 14) {
-  axios.post(
-    "https://restoran-service.onrender.com/edit-discount/6587ce2b73cf78a2f2018f77",
-    {
-      title: "Tushlik uchun chegirma",
-      discount: 10,
-    }
-  );
-} else {
-  axios.post(
-    "https://restoran-service.onrender.com/edit-discount/6587ce2b73cf78a2f2018f77",
-    {
-      title: "Tushlik uchun chegirma",
-      discount: 0,
-    }
-  );
-}
-
-if (hour >= 19) {
-}
 
 app.listen(process.env.PORT, () => {
   console.log("server has ben started");
