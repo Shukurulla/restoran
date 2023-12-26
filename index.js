@@ -45,7 +45,7 @@ app.post("/orders", cors(), async (req, res) => {
   res.json({ data: orders });
 });
 const hour = new Date().getHours();
-if (hour > 11 && hour <= 15) {
+if (hour > 11 && hour < 14) {
   axios.post(
     "https://restoran-service.onrender.com/edit-discount/6587ce2b73cf78a2f2018f77",
     {
@@ -61,6 +61,9 @@ if (hour > 11 && hour <= 15) {
       discount: 0,
     }
   );
+}
+
+if (hour >= 19) {
 }
 
 app.listen(process.env.PORT, () => {
