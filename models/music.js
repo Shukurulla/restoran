@@ -7,10 +7,13 @@ const musicModel = mongoose.model("music", {
   },
   music: {
     type: Object,
-    required: true,
+    musicName: {
+      type: String,
+      required: true,
+    },
+    isPlaying: Boolean,
+    isEnding: Boolean,
   },
-  isPlaying: Boolean,
-  isEnding: Boolean,
 });
 
 module.exports = musicModel;
