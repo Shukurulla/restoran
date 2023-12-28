@@ -13,6 +13,7 @@ const musicModel = mongoose.model("music", {
     },
     isPlaying: Boolean,
     isEnding: Boolean,
+    complaint: Boolean,
   },
   orderedAt: String,
 });
