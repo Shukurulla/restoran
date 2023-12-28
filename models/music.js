@@ -14,6 +14,7 @@ const musicModel = mongoose.model("music", {
     isPlaying: Boolean,
     isEnding: Boolean,
   },
+  orderedAt: String,
 });
 
 module.exports = musicModel;
