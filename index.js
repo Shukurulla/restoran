@@ -37,6 +37,7 @@ app.use(require("./routers/discount"));
 app.use(require("./routers/saved"));
 app.use(require("./routers/service-dj"));
 app.use(require("./routers/music"));
+app.use(require("./routers/karaoke"));
 app.use(fileUpload());
 
 app.use(express.static("public"));
