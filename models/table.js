@@ -5,6 +5,10 @@ const tableSchema = mongoose.Schema({
     type: String,
     required: true,
   },
+  tableNumber: {
+    type: Number,
+    required: true,
+  },
   surcharge: {
     type: Number,
     required: true,
