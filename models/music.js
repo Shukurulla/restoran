@@ -16,6 +16,10 @@ const musicModel = mongoose.model("music", {
     complaint: Boolean,
   },
   orderedAt: String,
+  price: {
+    type: Number,
+    required: true,
+  },
 });
 
 module.exports = musicModel;
