@@ -12,8 +12,12 @@ const orderSchema = mongoose.Schema({
   },
   selectFoods: {
     type: Object,
-    required: true,
   },
+  musicOrder: {
+    type: Object,
+    price: Number,
+  },
+  karaoke: Boolean,
   agent: {
     type: Object,
   },
@@ -45,6 +49,7 @@ const orderSchema = mongoose.Schema({
     type: Number,
     required: true,
   },
+  ofitsianService: Number,
 });
 
 const Order = mongoose.model("Orders", orderSchema);
