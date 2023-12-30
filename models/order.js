@@ -8,7 +8,6 @@ const orderSchema = mongoose.Schema({
   },
   allOrders: {
     type: Object,
-    required: true,
   },
   selectFoods: {
     type: Object,
