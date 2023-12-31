@@ -20,6 +20,10 @@ const musicModel = mongoose.model("music", {
     type: Number,
     required: true,
   },
+  agent: {
+    type: Object,
+    required: true,
+  },
 });
 
 module.exports = musicModel;

@@ -8,6 +8,10 @@ const Karaoke = mongoose.model("karaoke", {
     type: Number,
     required: true,
   },
+  agent: {
+    type: Object,
+    required: true,
+  },
 });
 
 module.exports = Karaoke;
