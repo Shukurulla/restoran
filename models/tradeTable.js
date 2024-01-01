@@ -9,6 +9,10 @@ const TradeTable = mongoose.model("tradeTable", {
     type: String,
     required: true,
   },
+  tableNumber: {
+    type: String,
+    required: true,
+  },
   orderedAt: {
     type: String,
     default: new Date(),
