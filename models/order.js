@@ -12,11 +12,6 @@ const orderSchema = mongoose.Schema({
   selectFoods: {
     type: Object,
   },
-  musicOrder: {
-    type: Object,
-    price: Number,
-  },
-  karaoke: Boolean,
   agent: {
     type: Object,
   },
