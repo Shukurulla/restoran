@@ -6,6 +6,7 @@ const TradeTable = mongoose.model("tradeTable", {
     required: true,
   },
   orderedAt: {
+    type: String,
     default: new Date(),
   },
 });
