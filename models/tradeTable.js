@@ -5,6 +5,10 @@ const TradeTable = mongoose.model("tradeTable", {
     type: String,
     required: true,
   },
+  tableName: {
+    type: String,
+    required: true,
+  },
   orderedAt: {
     type: String,
     default: new Date(),
