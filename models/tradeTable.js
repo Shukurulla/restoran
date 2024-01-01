@@ -5,7 +5,9 @@ const TradeTable = mongoose.model("tradeTable", {
     type: String,
     required: true,
   },
-  orderedAt: new Date(),
+  orderedAt: {
+    default: new Date(),
+  },
 });
 
 module.exports = TradeTable;
