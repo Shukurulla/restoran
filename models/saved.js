@@ -10,6 +10,10 @@ const Saved = mongoose.model("Saved", {
     type: String,
     required: true,
   },
+  tableNumber: {
+    type: Number,
+    required: true,
+  },
 });
 
 module.exports = Saved;
