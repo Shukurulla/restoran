@@ -6,6 +6,10 @@ const Saved = mongoose.model("Saved", {
     required: true,
   },
   tableId: String,
+  orderType: {
+    type: String,
+    required: true,
+  },
 });
 
 module.exports = Saved;
