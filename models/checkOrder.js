@@ -12,6 +12,7 @@ const saveOrderSchema = mongoose.Schema({
     type: String,
     required: true,
   },
+  ofisiantPrice: Number,
 });
 
 const SaveOrder = mongoose.model("SaveOrders", saveOrderSchema);
