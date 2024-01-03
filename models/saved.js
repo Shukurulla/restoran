@@ -14,6 +14,7 @@ const Saved = mongoose.model("Saved", {
     type: Number,
     required: true,
   },
+  place: String,
 });
 
 module.exports = Saved;
