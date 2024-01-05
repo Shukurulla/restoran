@@ -4,9 +4,6 @@ const cors = require("cors");
 const mongoose = require("mongoose");
 const Order = require("./models/order");
 const fileUpload = require("express-fileupload");
-const http = require("http");
-const { Server } = require("socket.io");
-const Music = require("./models/music");
 
 require("dotenv").config();
 // enable cors
