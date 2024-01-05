@@ -25,22 +25,4 @@ router.post("/delete-service-dj/:id", cors(), async (req, res) => {
   res.json({ data: service });
 });
 
-const hour = new Date();
-
-if (hour > 18 && hour < 6) {
-  axios.post(
-    "https://restoran-service.onrender.com/edit-service-dj/658b16c52ba2a9c35dc80c0a",
-    {
-      serviceDosage: 5000,
-    }
-  );
-} else {
-  axios.post(
-    "https://restoran-service.onrender.com/edit-service-dj/658b16c52ba2a9c35dc80c0a",
-    {
-      serviceDosage: 0,
-    }
-  );
-}
-
 module.exports = router;

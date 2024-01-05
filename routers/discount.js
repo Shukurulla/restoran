@@ -25,23 +25,4 @@ router.post("/delete-discount/:id", cors(), async (req, res) => {
   res.json({ data: discount });
 });
 
-const hour = new Date().getHours();
-if (hour > 11 && hour < 14) {
-  axios.post(
-    "https://restoran-service.onrender.com/edit-discount/6587ce2b73cf78a2f2018f77",
-    {
-      title: "Tushlik uchun chegirma",
-      discount: 10,
-    }
-  );
-} else {
-  axios.post(
-    "https://restoran-service.onrender.com/edit-discount/6587ce2b73cf78a2f2018f77",
-    {
-      title: "Tushlik uchun chegirma",
-      discount: 0,
-    }
-  );
-}
-
 module.exports = router;
