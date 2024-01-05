@@ -4,6 +4,9 @@ const cors = require("cors");
 const mongoose = require("mongoose");
 const Order = require("./models/order");
 const fileUpload = require("express-fileupload");
+const http = require("http");
+const { Server } = require("socket.io");
+const Music = require("./models/music");
 
 require("dotenv").config();
 // enable cors
@@ -14,6 +17,28 @@ app.use(
     credentials: true,
   })
 );
+
+const server = http.createServer(app);
+
+const io = new Server(server, {
+  cors: {
+    origin: "http://localhost:5173",
+    methods: ["GET", "POST"],
+  },
+});
+
+mongoose
+  .connect(process.env.MONGO_URI, {
+    useNewUrlParser: true,
+    useUnifiedTopology: true,
+  })
+  .then((res) => {
+    res && console.log("database connected");
+  });
+
+io.on("connection", (socket) => {
+  console.log(`User id: ${socket.id}`);
+});
 
 mongoose.set("strictQuery", false);
 
@@ -36,6 +61,9 @@ app.use(require("./routers/karaoke"));
 app.use(fileUpload());
 
 app.use(express.static("public"));
+app.get("/", (req, res) => {
+  res.send("asdsa");
+});
 
 app.post("/orders", cors(), async (req, res) => {
   await Order.create(req.body);
@@ -43,4 +71,4 @@ app.post("/orders", cors(), async (req, res) => {
   res.json({ data: orders });
 });
 
-app.listen(process.env.PORT);
+server.listen(process.env.PORT);
