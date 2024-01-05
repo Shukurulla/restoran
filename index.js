@@ -4,7 +4,9 @@ const cors = require("cors");
 const mongoose = require("mongoose");
 const Order = require("./models/order");
 const fileUpload = require("express-fileupload");
-const axios = require("axios");
+const http = require("http");
+const { Server } = require("socket.io");
+const Music = require("./models/music");
 
 require("dotenv").config();
 // enable cors
@@ -15,10 +17,6 @@ app.use(
     credentials: true,
   })
 );
-
-mongoose.connect(process.env.MONGO_URI).then((res) => {
-  res && console.log("database connected");
-});
 
 mongoose.set("strictQuery", false);
 
@@ -48,6 +46,4 @@ app.post("/orders", cors(), async (req, res) => {
   res.json({ data: orders });
 });
 
-app.listen(process.env.PORT, () => {
-  console.log("server has ben started");
-});
+app.listen(process.env.PORT);

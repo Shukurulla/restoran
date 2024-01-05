@@ -13,6 +13,10 @@ const saveOrderSchema = mongoose.Schema({
     required: true,
   },
   ofitsiantPrice: Number,
+  similarOrder: {
+    type: Object,
+    required: true,
+  },
 });
 
 const SaveOrder = mongoose.model("SaveOrders", saveOrderSchema);
