@@ -6,7 +6,6 @@ const Order = require("./models/order");
 const fileUpload = require("express-fileupload");
 const http = require("http");
 const { Server } = require("socket.io");
-const Music = require("./models/music");
 
 require("dotenv").config();
 // enable cors
@@ -22,7 +21,7 @@ const server = http.createServer(app);
 
 const io = new Server(server, {
   cors: {
-    origin: "http://localhost:5173",
+    origin: "*",
     methods: ["GET", "POST"],
   },
 });
@@ -38,6 +37,11 @@ mongoose
 
 io.on("connection", (socket) => {
   console.log(`User id: ${socket.id}`);
+  socket.on("post_order", async (data) => {
+    await Order.create(data);
+    const orders = await Order.find();
+    socket.broadcast.emit("get_order", orders);
+  });
 });
 
 mongoose.set("strictQuery", false);
@@ -63,12 +67,6 @@ app.use(fileUpload());
 app.use(express.static("public"));
 app.get("/", (req, res) => {
   res.send("asdsa");
-});
-
-app.post("/orders", cors(), async (req, res) => {
-  await Order.create(req.body);
-  const orders = await Order.find();
-  res.json({ data: orders });
 });
 
 server.listen(process.env.PORT);
