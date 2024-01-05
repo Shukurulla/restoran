@@ -6,6 +6,7 @@ const Order = require("./models/order");
 const fileUpload = require("express-fileupload");
 const http = require("http");
 const { Server } = require("socket.io");
+const Karaoke = require("./models/karaoke");
 
 require("dotenv").config();
 // enable cors
@@ -41,6 +42,11 @@ io.on("connection", (socket) => {
     await Order.create(data);
     const orders = await Order.find();
     socket.broadcast.emit("get_order", orders);
+  });
+  socket.on("post_karaoke", async (data) => {
+    await Karaoke.create(data);
+    const karaoke = await Karaoke.find();
+    socket.emit("get_karaoke", karaoke);
   });
 });
 
