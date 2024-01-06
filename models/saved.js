@@ -15,6 +15,7 @@ const Saved = mongoose.model("Saved", {
     required: true,
   },
   place: String,
+  numberOfPeople: Number,
 });
 
 module.exports = Saved;
