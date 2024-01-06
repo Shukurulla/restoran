@@ -15,7 +15,10 @@ const Saved = mongoose.model("Saved", {
     required: true,
   },
   place: String,
-  numberOfPeople: Number,
+  numberOfPeople: {
+    type: Number,
+    default: 0,
+  },
 });
 
 module.exports = Saved;
