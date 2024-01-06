@@ -4,9 +4,9 @@ const Karaoke = mongoose.model("karaoke", {
   title: {
     type: String,
   },
-  persent: {
-    type: Number,
-    required: true,
+  orderedAt: {
+    type: String,
+    default: new Date(),
   },
   agent: {
     type: Object,
