@@ -46,7 +46,7 @@ io.on("connection", (socket) => {
     await Karaoke.create(data);
     console.log(data);
     const karaoke = await Karaoke.find();
-    socket.emit("get_karaoke", karaoke);
+    socket.broadcast.emit("get_karaoke", karaoke);
   });
 });
 
