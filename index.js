@@ -4,8 +4,8 @@ const cors = require("cors");
 const mongoose = require("mongoose");
 const Order = require("./models/order");
 const fileUpload = require("express-fileupload");
-const http = require("http").Server(app);
-const io = require("socket.io")(http);
+const http = require("http");
+const { Server } = require("socket.io");
 const Karaoke = require("./models/karaoke");
 
 require("dotenv").config();
@@ -17,6 +17,14 @@ app.use(
     credentials: true,
   })
 );
+
+const server = http.createServer(app);
+const io = new Server(server, {
+  cors: {
+    origin: "*",
+    methods: ["GET", "POST"],
+  },
+});
 
 mongoose
   .connect(process.env.MONGO_URI, {
@@ -67,4 +75,4 @@ app.get("/", (req, res) => {
   res.send("asdsa");
 });
 
-http.listen(process.env.PORT);
+server.listen(process.env.PORT);
