@@ -38,15 +38,25 @@ mongoose
 io.on("connection", (socket) => {
   console.log(`User id: ${socket.id}`);
   socket.on("post_order", async (data) => {
-    await Order.create(data);
-    const orders = await Order.find();
-    socket.broadcast.emit("get_order", orders);
+    try {
+      await Order.create(data);
+      const orders = await Order.find();
+      socket.broadcast.emit("get_order", orders);
+      socket.to(socket.id).emit("get_message", { msg: "success" });
+    } catch (error) {
+      socket.to(socket.id).emit("get_message", { msg: "error" });
+    }
   });
   socket.on("post_karaoke", async (data) => {
-    await Karaoke.create(data);
-    console.log(data);
-    const karaoke = await Karaoke.find();
-    socket.broadcast.emit("get_karaoke", karaoke);
+    try {
+      await Karaoke.create(data);
+      console.log(data);
+      const karaoke = await Karaoke.find();
+      socket.broadcast.emit("get_karaoke", karaoke);
+      socket.to(socket.id).emit("get_message", { msg: "success" });
+    } catch (error) {
+      socket.to(socket.id).emit("get_message", { msg: "error" });
+    }
   });
 });
 
