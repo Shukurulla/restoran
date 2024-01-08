@@ -42,9 +42,9 @@ io.on("connection", (socket) => {
       await Order.create(data);
       const orders = await Order.find();
       socket.broadcast.emit("get_order", orders);
-      socket.to(socket.id).emit("get_message", { msg: "success" });
+      io.to(socket.id).emit("get_message", { msg: "success" });
     } catch (error) {
-      socket.to(socket.id).emit("get_message", { msg: "error" });
+      io.to(socket.id).emit("get_message", { msg: "error" });
     }
   });
   socket.on("post_karaoke", async (data) => {
@@ -53,9 +53,9 @@ io.on("connection", (socket) => {
       console.log(data);
       const karaoke = await Karaoke.find();
       socket.broadcast.emit("get_karaoke", karaoke);
-      socket.to(socket.id).emit("get_message", { msg: "success" });
+      io.to(socket.id).emit("get_message", { msg: "success" });
     } catch (error) {
-      socket.to(socket.id).emit("get_message", { msg: "error" });
+      io.to(socket.id).emit("get_message", { msg: "error" });
     }
   });
 });
