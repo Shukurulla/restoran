@@ -24,6 +24,7 @@
     "express-upload": "^0.1.0",
     "express-useragent": "^1.0.15",
     "filereader": "^0.10.3",
+    "googleapis": "^130.0.0",
     "mongoose": "^7.6.3",
     "multer": "^1.4.5-lts.1",
     "netlify-lambda": "^2.0.16",

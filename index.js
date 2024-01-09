@@ -7,6 +7,25 @@ const fileUpload = require("express-fileupload");
 const http = require("http");
 const { Server } = require("socket.io");
 const Karaoke = require("./models/karaoke");
+const Call = requrie("./models/call.js");
+const { google } = require("googleapis");
+
+const apiKeys = require("./api.json");
+
+const SCOPE = ["https://www.googleapis.com/auth/drive"];
+
+const authorize = async () => {
+  const jwtClient = new google.auth.JWT(
+    apiKeys.client_email,
+    null,
+    apiKeys.private_key,
+    SCOPE
+  );
+  await jwtClient.authorize();
+  return jwtClient;
+};
+
+const fileUpload = async (authClient) => {};
 
 require("dotenv").config();
 // enable cors
@@ -58,6 +77,16 @@ io.on("connection", (socket) => {
       io.to(socket.id).emit("get_message", { msg: "error" });
     }
   });
+  socket.on("call", async (data) => {
+    try {
+      await Call.create(data);
+      const call = await Call.find();
+      socket.broadcast.emit("call-info", call);
+      io.to(socket.id).emit("call-response", { msg: "successfully" });
+    } catch (error) {
+      io.to(socket.id).emit("call-respone", { msg: "error" });
+    }
+  });
 });
 
 mongoose.set("strictQuery", false);
@@ -78,6 +107,7 @@ app.use(require("./routers/saved"));
 app.use(require("./routers/service-dj"));
 app.use(require("./routers/music"));
 app.use(require("./routers/karaoke"));
+app.use(require("./routers/call"));
 app.use(fileUpload());
 
 app.use(express.static("public"));
