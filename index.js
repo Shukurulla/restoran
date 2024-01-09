@@ -8,24 +8,6 @@ const http = require("http");
 const { Server } = require("socket.io");
 const Karaoke = require("./models/karaoke");
 const Call = requrie("./models/call.js");
-const { google } = require("googleapis");
-
-const apiKeys = require("./api.json");
-
-const SCOPE = ["https://www.googleapis.com/auth/drive"];
-
-const authorize = async () => {
-  const jwtClient = new google.auth.JWT(
-    apiKeys.client_email,
-    null,
-    apiKeys.private_key,
-    SCOPE
-  );
-  await jwtClient.authorize();
-  return jwtClient;
-};
-
-const fileUpload = async (authClient) => {};
 
 require("dotenv").config();
 // enable cors
