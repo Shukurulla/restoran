@@ -17,6 +17,10 @@ const call = mongoose.model("cal", {
     type: String,
     default: new Date(),
   },
+  agent: {
+    type: Object,
+    required: true,
+  },
 });
 
 module.exports = call;
