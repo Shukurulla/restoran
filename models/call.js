@@ -1,6 +1,6 @@
 const mongoose = require("mongoose");
 
-const call = mongoose.model("cal", {
+const Call = mongoose.model("cal", {
   tableNumber: {
     type: Number,
     required: true,
@@ -23,4 +23,4 @@ const call = mongoose.model("cal", {
   },
 });
 
-module.exports = call;
+module.exports = Call;

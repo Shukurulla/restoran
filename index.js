@@ -7,7 +7,7 @@ const fileUpload = require("express-fileupload");
 const http = require("http");
 const { Server } = require("socket.io");
 const Karaoke = require("./models/karaoke");
-const Call = requrie("./models/call.js");
+const Call = requrie("./models/call");
 
 require("dotenv").config();
 // enable cors
