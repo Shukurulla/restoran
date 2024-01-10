@@ -66,7 +66,7 @@ io.on("connection", (socket) => {
       socket.broadcast.emit("call-info", call);
       io.to(socket.id).emit("call-response", { msg: "successfully" });
     } catch (error) {
-      io.to(socket.id).emit("call-respone", { msg: "error" });
+      io.to(socket.id).emit("call-response", { msg: "error" });
     }
   });
 });
