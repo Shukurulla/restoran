@@ -17,6 +17,10 @@ const Karaoke = mongoose.model("karaoke", {
     type: Object,
     required: true,
   },
+  allOrders: {
+    type: Object,
+    default: [],
+  },
 });
 
 module.exports = Karaoke;
