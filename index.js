@@ -90,6 +90,7 @@ app.use(require("./routers/service-dj"));
 app.use(require("./routers/music"));
 app.use(require("./routers/karaoke"));
 app.use(require("./routers/call"));
+app.use(require("./routers/waiter"));
 app.use(fileUpload());
 
 app.use(express.static("public"));
@@ -97,4 +98,6 @@ app.get("/", (req, res) => {
   res.send("asdsa");
 });
 
-server.listen(process.env.PORT);
+server.listen(process.env.PORT, () => {
+  console.log(`Server is running on port ${process.env.PORT}`);
+});
