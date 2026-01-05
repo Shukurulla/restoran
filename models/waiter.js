@@ -23,6 +23,18 @@ const waiterSchema = new mongoose.Schema(
       type: Boolean,
       default: true,
     },
+    assignedTables: [{
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Table',
+    }],
+    socketId: {
+      type: String,
+      default: null,
+    },
+    isOnline: {
+      type: Boolean,
+      default: false,
+    },
   },
   {
     timestamps: true,
