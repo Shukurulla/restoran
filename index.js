@@ -14,6 +14,7 @@ const SaveOrder = require("./models/checkOrder");
 const Call = require("./models/call.js");
 const Restaurant = require("./models/restaurant");
 const Table = require("./models/table");
+const QRSession = require("./models/qr-session");
 
 require("dotenv").config();
 
@@ -168,6 +169,8 @@ io.on("connection", (socket) => {
   // Yangi buyurtma (mijozdan) - ORDER MERGING bilan
   socket.on("post_order", async (data) => {
     try {
+      console.log("Received order data:", JSON.stringify(data, null, 2));
+
       const {
         restaurantId,
         tableId,
@@ -176,6 +179,34 @@ io.on("connection", (socket) => {
         selectFoods,
         sessionId,
       } = data;
+
+      // Validatsiya
+      if (!restaurantId) {
+        console.error("Order error: restaurantId is missing");
+        socket.emit("get_message", { msg: "error", error: "Restaurant ID topilmadi" });
+        return;
+      }
+
+      if (!tableId) {
+        console.error("Order error: tableId is missing");
+        socket.emit("get_message", { msg: "error", error: "Stol tanlanmagan" });
+        return;
+      }
+
+      if (!selectFoods || selectFoods.length === 0) {
+        console.error("Order error: selectFoods is empty");
+        socket.emit("get_message", { msg: "error", error: "Buyurtma bo'sh" });
+        return;
+      }
+
+      // SessionId ni token orqali topish
+      let sessionObjectId = null;
+      if (sessionId) {
+        const session = await QRSession.findOne({ sessionToken: sessionId });
+        if (session) {
+          sessionObjectId = session._id;
+        }
+      }
 
       // Stol uchun mavjud ochiq orderni tekshirish (Order Merging)
       let existingOrder = await Order.findOne({
@@ -236,7 +267,7 @@ io.on("connection", (socket) => {
         isNewOrder = true;
         order = await Order.create({
           restaurantId,
-          sessionId,
+          sessionId: sessionObjectId,
           tableId,
           tableName,
           tableNumber: tableNumber || 0,
