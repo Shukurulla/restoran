@@ -3,6 +3,7 @@ const Food = require("../models/foods");
 const router = express.Router();
 const cors = require("cors");
 const multer = require("multer");
+const { authenticateRestaurantAdmin } = require("../middleware/auth");
 const path = require("path");
 const fs = require("fs");
 
@@ -40,12 +41,12 @@ const upload = multer({
   },
 });
 
-router.get("/foods", cors(), async (req, res) => {
-  const foods = await Food.find();
+router.get("/foods", cors(), authenticateRestaurantAdmin, async (req, res) => {
+  const foods = await Food.find({ restaurantId: req.restaurantId });
   res.json({ data: foods });
 });
 
-router.post("/foods-create", cors(), upload.single("image"), async (req, res) => {
+router.post("/foods-create", cors(), authenticateRestaurantAdmin, upload.single("image"), async (req, res) => {
   try {
     const imageUrl = req.file
       ? `/images/foods/${req.file.filename}`
@@ -54,10 +55,11 @@ router.post("/foods-create", cors(), upload.single("image"), async (req, res) =>
     const foodData = {
       ...req.body,
       image: imageUrl,
+      restaurantId: req.restaurantId, // Faqat o'z restorani uchun yaratish
     };
 
     await Food.create(foodData);
-    const food = await Food.find();
+    const food = await Food.find({ restaurantId: req.restaurantId });
     res.json({ data: food });
   } catch (error) {
     console.error(error);
@@ -65,17 +67,36 @@ router.post("/foods-create", cors(), upload.single("image"), async (req, res) =>
   }
 });
 
-router.post("/edit-food/:id", cors(), async (req, res) => {
-  const id = req.params.id;
-  await Food.findByIdAndUpdate(id, req.body);
-  const data = await Food.find();
-  res.json({ data: data });
+router.post("/edit-food/:id", cors(), authenticateRestaurantAdmin, async (req, res) => {
+  try {
+    const id = req.params.id;
+    // Faqat o'z restoranining taomini tahrirlash
+    const food = await Food.findOne({ _id: id, restaurantId: req.restaurantId });
+    if (!food) {
+      return res.status(404).json({ error: "Taom topilmadi" });
+    }
+    await Food.findByIdAndUpdate(id, req.body);
+    const data = await Food.find({ restaurantId: req.restaurantId });
+    res.json({ data: data });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
 });
-router.post("/delete-food/:id", cors(), async (req, res) => {
-  const id = req.params.id;
-  await Food.findByIdAndRemove(id);
-  const foods = await Food.find();
-  res.json({ data: foods });
+
+router.post("/delete-food/:id", cors(), authenticateRestaurantAdmin, async (req, res) => {
+  try {
+    const id = req.params.id;
+    // Faqat o'z restoranining taomini o'chirish
+    const food = await Food.findOne({ _id: id, restaurantId: req.restaurantId });
+    if (!food) {
+      return res.status(404).json({ error: "Taom topilmadi" });
+    }
+    await Food.findByIdAndRemove(id);
+    const foods = await Food.find({ restaurantId: req.restaurantId });
+    res.json({ data: foods });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
 });
 
 module.exports = router;

@@ -2,29 +2,55 @@ const express = require("express");
 const Category = require("../models/category");
 const router = express.Router();
 const cors = require("cors");
+const { authenticateRestaurantAdmin } = require("../middleware/auth");
 
-router.get("/categories", cors(), async (req, res) => {
-  const categories = await Category.find();
+router.get("/categories", cors(), authenticateRestaurantAdmin, async (req, res) => {
+  const categories = await Category.find({ restaurantId: req.restaurantId });
   res.json({ data: categories });
 });
 
-router.post("/categories", cors(), async (req, res) => {
-  await Category.create(req.body);
-  const categories = await Category.find();
-  res.json({ data: categories });
+router.post("/categories", cors(), authenticateRestaurantAdmin, async (req, res) => {
+  try {
+    const categoryData = {
+      ...req.body,
+      restaurantId: req.restaurantId,
+    };
+    await Category.create(categoryData);
+    const categories = await Category.find({ restaurantId: req.restaurantId });
+    res.json({ data: categories });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
 });
 
-router.post("/edit-category/:id", cors(), async (req, res) => {
-  const id = req.params.id;
-  await Category.findByIdAndUpdate(id, req.body);
-  const categories = await Category.find();
-  res.json({ data: categories });
+router.post("/edit-category/:id", cors(), authenticateRestaurantAdmin, async (req, res) => {
+  try {
+    const id = req.params.id;
+    const category = await Category.findOne({ _id: id, restaurantId: req.restaurantId });
+    if (!category) {
+      return res.status(404).json({ error: "Kategoriya topilmadi" });
+    }
+    await Category.findByIdAndUpdate(id, req.body);
+    const categories = await Category.find({ restaurantId: req.restaurantId });
+    res.json({ data: categories });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
 });
-router.post("/delete-category/:id", cors(), async (req, res) => {
-  const id = req.params.id;
-  await Category.findByIdAndRemove(id);
-  const foods = await Category.find();
-  res.json({ data: foods });
+
+router.post("/delete-category/:id", cors(), authenticateRestaurantAdmin, async (req, res) => {
+  try {
+    const id = req.params.id;
+    const category = await Category.findOne({ _id: id, restaurantId: req.restaurantId });
+    if (!category) {
+      return res.status(404).json({ error: "Kategoriya topilmadi" });
+    }
+    await Category.findByIdAndRemove(id);
+    const categories = await Category.find({ restaurantId: req.restaurantId });
+    res.json({ data: categories });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
 });
 
 module.exports = router;

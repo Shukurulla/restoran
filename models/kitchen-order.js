@@ -29,13 +29,19 @@ const kitchenOrderItemSchema = new mongoose.Schema({
 
 const kitchenOrderSchema = new mongoose.Schema(
   {
+    restaurantId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Restaurant",
+      required: true,
+    },
     orderId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: 'Orders',
+      ref: "Orders",
       required: true,
     },
     tableId: {
-      type: String,
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Table",
       required: true,
     },
     tableName: {
@@ -47,7 +53,7 @@ const kitchenOrderSchema = new mongoose.Schema(
     },
     waiterId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: 'Waiter',
+      ref: "Staff",
       default: null,
     },
     waiterName: {
@@ -101,5 +107,8 @@ const kitchenOrderSchema = new mongoose.Schema(
     timestamps: true,
   }
 );
+
+kitchenOrderSchema.index({ restaurantId: 1, status: 1 });
+kitchenOrderSchema.index({ restaurantId: 1, tableId: 1 });
 
 module.exports = mongoose.model("KitchenOrder", kitchenOrderSchema);

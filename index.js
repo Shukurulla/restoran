@@ -2,18 +2,22 @@ const express = require("express");
 const app = express();
 const cors = require("cors");
 const mongoose = require("mongoose");
-const Order = require("./models/order");
 const fileUpload = require("express-fileupload");
 const http = require("http");
 const { Server } = require("socket.io");
-const Karaoke = require("./models/karaoke");
-const Call = require("./models/call.js");
+
+// Models
+const Order = require("./models/order");
 const KitchenOrder = require("./models/kitchen-order");
-const Waiter = require("./models/waiter");
+const Staff = require("./models/staff");
 const SaveOrder = require("./models/checkOrder");
+const Call = require("./models/call.js");
+const Restaurant = require("./models/restaurant");
+const Table = require("./models/table");
 
 require("dotenv").config();
-// enable cors
+
+// CORS
 app.use(
   cors({
     origin: "*",
@@ -30,27 +34,44 @@ const io = new Server(server, {
   },
 });
 
+// Default super admin yaratish
+const createDefaultSuperAdmin = require("./seeds/super-admin.seed");
+
+// MongoDB ulanish
 mongoose
   .connect(process.env.MONGO_URI, {
     useNewUrlParser: true,
     useUnifiedTopology: true,
   })
-  .then((res) => {
-    res && console.log("database connected");
+  .then(async () => {
+    console.log("Database connected");
+    // Default super admin yaratish
+    await createDefaultSuperAdmin();
+  })
+  .catch((err) => {
+    console.error("Database connection error:", err);
   });
 
-// Bo'sh ofitsiyantni topish va tayinlash
-async function assignWaiterToOrder(tableId, tableName, tableNumber) {
+mongoose.set("strictQuery", false);
+
+// Bo'sh ofitsiyantni topish va tayinlash (multi-tenant)
+async function assignWaiterToOrder(restaurantId, tableId) {
   try {
-    // Faol va online ofitsiyantlarni olish
-    const availableWaiters = await Waiter.find({
-      isActive: true,
+    // Shu restoranning faol va online ofitsiyantlarini olish
+    const availableWaiters = await Staff.find({
+      restaurantId,
+      role: "waiter",
+      status: "working",
       isOnline: true,
     });
 
     if (availableWaiters.length === 0) {
       // Agar online ofitsiyant yo'q bo'lsa, faol ofitsiyantlardan birini olish
-      const activeWaiters = await Waiter.find({ isActive: true });
+      const activeWaiters = await Staff.find({
+        restaurantId,
+        role: "waiter",
+        status: "working",
+      });
       if (activeWaiters.length === 0) return null;
 
       // Random tanlash
@@ -65,6 +86,7 @@ async function assignWaiterToOrder(tableId, tableName, tableNumber) {
     const waiterWorkloads = await Promise.all(
       availableWaiters.map(async (waiter) => {
         const activeOrders = await KitchenOrder.countDocuments({
+          restaurantId,
           waiterId: waiter._id,
           createdAt: { $gte: today },
           status: { $in: ["pending", "preparing", "ready"] },
@@ -82,55 +104,95 @@ async function assignWaiterToOrder(tableId, tableName, tableNumber) {
   }
 }
 
+// Socket.io
 io.on("connection", (socket) => {
   console.log(`User connected: ${socket.id}`);
 
-  // Ofitsiyant ulanishi
-  socket.on("waiter_connect", async (waiterId) => {
+  // Xodim ulanishi (waiter, cook, cashier)
+  socket.on("staff_connect", async (data) => {
     try {
-      await Waiter.findByIdAndUpdate(waiterId, {
+      const { staffId, restaurantId, role } = data;
+
+      await Staff.findByIdAndUpdate(staffId, {
         socketId: socket.id,
         isOnline: true,
       });
-      socket.join(`waiter_${waiterId}`);
-      console.log(`Waiter ${waiterId} connected`);
+
+      // Restoranga tegishli xonaga qo'shish
+      socket.join(`restaurant_${restaurantId}`);
+
+      if (role === "waiter") {
+        socket.join(`waiter_${staffId}`);
+        console.log(
+          `Waiter ${staffId} connected to restaurant ${restaurantId}`
+        );
+      } else if (role === "cook") {
+        socket.join(`kitchen_${restaurantId}`);
+        console.log(`Cook connected to restaurant ${restaurantId}`);
+      } else if (role === "cashier") {
+        socket.join(`cashier_${restaurantId}`);
+        console.log(`Cashier connected to restaurant ${restaurantId}`);
+      }
+    } catch (error) {
+      console.error("Staff connect error:", error);
+    }
+  });
+
+  // Legacy support - eski panellar uchun
+  socket.on("waiter_connect", async (waiterId) => {
+    try {
+      const waiter = await Staff.findByIdAndUpdate(
+        waiterId,
+        { socketId: socket.id, isOnline: true },
+        { new: true }
+      );
+      if (waiter) {
+        socket.join(`waiter_${waiterId}`);
+        socket.join(`restaurant_${waiter.restaurantId}`);
+      }
     } catch (error) {
       console.error("Waiter connect error:", error);
     }
   });
 
-  // Oshpaz ulanishi
-  socket.on("cook_connect", () => {
-    socket.join("kitchen");
-    console.log("Cook connected to kitchen room");
+  socket.on("cook_connect", (restaurantId) => {
+    socket.join(`kitchen_${restaurantId || "default"}`);
+    socket.join("kitchen"); // Legacy support
   });
 
-  // Kassa ulanishi
-  socket.on("cashier_connect", () => {
-    socket.join("cashier");
-    console.log("Cashier connected");
+  socket.on("cashier_connect", (restaurantId) => {
+    socket.join(`cashier_${restaurantId || "default"}`);
+    socket.join("cashier"); // Legacy support
   });
 
-  // Yangi buyurtma (mijozdan)
+  // Yangi buyurtma (mijozdan) - ORDER MERGING bilan
   socket.on("post_order", async (data) => {
     try {
-      const order = await Order.create(data);
-      const orders = await Order.find();
-      socket.broadcast.emit("get_order", orders);
-      io.to(socket.id).emit("get_message", { msg: "success" });
+      const {
+        restaurantId,
+        tableId,
+        tableName,
+        tableNumber,
+        selectFoods,
+        sessionId,
+      } = data;
 
-      // Ofitsiyantni tayinlash
-      const assignedWaiter = await assignWaiterToOrder(
-        data.tableId,
-        data.tableName,
-        data.tableNumber
-      );
+      // Stol uchun mavjud ochiq orderni tekshirish (Order Merging)
+      let existingOrder = await Order.findOne({
+        restaurantId,
+        tableId,
+        status: { $nin: ["paid", "cancelled"] },
+      });
 
-      // Kitchen order yaratish
-      const items = [];
-      if (data.selectFoods && Array.isArray(data.selectFoods)) {
-        data.selectFoods.forEach((food) => {
-          items.push({
+      let order;
+      let kitchenOrder;
+      let isNewOrder = false;
+
+      // Yangi itemlarni tayyorlash
+      const newItems = [];
+      if (selectFoods && Array.isArray(selectFoods)) {
+        selectFoods.forEach((food) => {
+          newItems.push({
             foodId: food._id || food.id,
             foodName: food.foodName || food.name,
             quantity: food.quantity || food.count || 1,
@@ -140,54 +202,123 @@ io.on("connection", (socket) => {
         });
       }
 
-      const kitchenOrder = await KitchenOrder.create({
-        orderId: order._id,
-        tableId: data.tableId,
-        tableName: data.tableName,
-        tableNumber: data.tableNumber || 0,
-        waiterId: assignedWaiter ? assignedWaiter._id : null,
-        waiterName: assignedWaiter
-          ? `${assignedWaiter.firstName} ${assignedWaiter.lastName}`
-          : null,
-        items: items,
-        status: "pending",
-      });
+      if (existingOrder) {
+        // Mavjud orderga qo'shish
+        existingOrder.allOrders = [
+          ...(existingOrder.allOrders || []),
+          ...(data.allOrders || selectFoods),
+        ];
+        existingOrder.selectFoods = [
+          ...(existingOrder.selectFoods || []),
+          ...selectFoods,
+        ];
+        existingOrder.totalPrice =
+          (parseFloat(existingOrder.totalPrice) || 0) +
+          (parseFloat(data.totalPrice) || 0);
+        await existingOrder.save();
+        order = existingOrder;
 
-      // Oshpazlarga yangi buyurtma xabari
+        // KitchenOrder'ga yangi itemlarni qo'shish
+        kitchenOrder = await KitchenOrder.findOne({
+          orderId: existingOrder._id,
+        });
+        if (kitchenOrder) {
+          kitchenOrder.items.push(...newItems);
+          // Agar tayyor bo'lgan bo'lsa, statusni qaytarish
+          if (kitchenOrder.status === "served" || kitchenOrder.allItemsReady) {
+            kitchenOrder.status = "preparing";
+            kitchenOrder.allItemsReady = false;
+          }
+          await kitchenOrder.save();
+        }
+      } else {
+        // Yangi order yaratish
+        isNewOrder = true;
+        order = await Order.create({
+          restaurantId,
+          sessionId,
+          tableId,
+          tableName,
+          tableNumber: tableNumber || 0,
+          allOrders: data.allOrders || selectFoods,
+          selectFoods,
+          totalPrice: data.totalPrice || 0,
+          discount: data.discount || false,
+          userInfo: data.userInfo,
+          surcharge: data.surcharge || 0,
+          agent: data.agent,
+        });
+
+        // Ofitsiyantni tayinlash
+        const assignedWaiter = await assignWaiterToOrder(restaurantId, tableId);
+
+        // Kitchen order yaratish
+        kitchenOrder = await KitchenOrder.create({
+          restaurantId,
+          orderId: order._id,
+          tableId,
+          tableName,
+          tableNumber: tableNumber || 0,
+          waiterId: assignedWaiter ? assignedWaiter._id : null,
+          waiterName: assignedWaiter
+            ? `${assignedWaiter.firstName} ${assignedWaiter.lastName}`
+            : null,
+          items: newItems,
+          status: "pending",
+        });
+
+        // Ofitsiyantga xabar
+        if (assignedWaiter) {
+          io.to(`waiter_${assignedWaiter._id}`).emit("new_table_assigned", {
+            order: kitchenOrder,
+            tableName,
+            tableNumber,
+          });
+        }
+      }
+
+      // Mijozga javob
+      socket.emit("get_message", { msg: "success", orderId: order._id });
+
+      // Oshpazlarga xabar
       const kitchenOrders = await KitchenOrder.find({
+        restaurantId,
         status: { $in: ["pending", "preparing"] },
       })
         .sort({ createdAt: 1 })
         .populate("waiterId");
 
+      io.to(`kitchen_${restaurantId}`).emit("new_kitchen_order", {
+        order: kitchenOrder,
+        allOrders: kitchenOrders,
+        isNewOrder,
+      });
+
+      // Legacy support
       io.to("kitchen").emit("new_kitchen_order", {
         order: kitchenOrder,
         allOrders: kitchenOrders,
       });
 
       // Kassaga xabar
-      io.to("cashier").emit("new_kitchen_order", {
+      io.to(`cashier_${restaurantId}`).emit("new_kitchen_order", {
         order: kitchenOrder,
       });
+      io.to("cashier").emit("new_kitchen_order", { order: kitchenOrder });
 
-      // Ofitsiyantga xabar
-      if (assignedWaiter) {
-        io.to(`waiter_${assignedWaiter._id}`).emit("new_table_assigned", {
-          order: kitchenOrder,
-          tableName: data.tableName,
-          tableNumber: data.tableNumber,
-        });
-      }
+      // Barcha buyurtmalarni broadcast
+      const orders = await Order.find({ restaurantId });
+      socket.broadcast.emit("get_order", orders);
     } catch (error) {
       console.error("Post order error:", error);
-      io.to(socket.id).emit("get_message", { msg: "error" });
+      socket.emit("get_message", { msg: "error", error: error.message });
     }
   });
 
   // Oshpaz ovqatni tayyor deb belgilashi
   socket.on("item_ready", async (data) => {
     try {
-      const { orderId, itemIndex } = data;
+      const { orderId, itemIndex, restaurantId } = data;
       const order = await KitchenOrder.findById(orderId);
 
       if (!order) return;
@@ -210,13 +341,22 @@ io.on("connection", (socket) => {
 
       await order.save();
 
-      // Barcha oshpazlarga yangilangan ma'lumot
+      // Yangilangan ma'lumotni yuborish
       const kitchenOrders = await KitchenOrder.find({
+        restaurantId: order.restaurantId,
         status: { $in: ["pending", "preparing", "ready"] },
       })
         .sort({ createdAt: 1 })
         .populate("waiterId");
 
+      io.to(`kitchen_${order.restaurantId}`).emit(
+        "kitchen_orders_updated",
+        kitchenOrders
+      );
+      io.to(`cashier_${order.restaurantId}`).emit(
+        "kitchen_orders_updated",
+        kitchenOrders
+      );
       io.to("kitchen").emit("kitchen_orders_updated", kitchenOrders);
       io.to("cashier").emit("kitchen_orders_updated", kitchenOrders);
     } catch (error) {
@@ -244,13 +384,18 @@ io.on("connection", (socket) => {
         });
       }
 
-      // Barcha oshpazlarga yangilangan ma'lumot
+      // Yangilangan ma'lumot
       const kitchenOrders = await KitchenOrder.find({
+        restaurantId: order.restaurantId,
         status: { $in: ["pending", "preparing", "ready"] },
       })
         .sort({ createdAt: 1 })
         .populate("waiterId");
 
+      io.to(`kitchen_${order.restaurantId}`).emit(
+        "kitchen_orders_updated",
+        kitchenOrders
+      );
       io.to("kitchen").emit("kitchen_orders_updated", kitchenOrders);
     } catch (error) {
       console.error("Notify waiter error:", error);
@@ -269,20 +414,33 @@ io.on("connection", (socket) => {
       order.servedAt = new Date();
       await order.save();
 
-      // Barcha oshpazlarga yangilangan ma'lumot
+      // Order statusini ham yangilash
+      await Order.findByIdAndUpdate(order.orderId, { status: "served" });
+
       const kitchenOrders = await KitchenOrder.find({
+        restaurantId: order.restaurantId,
         status: { $in: ["pending", "preparing", "ready"] },
       })
         .sort({ createdAt: 1 })
         .populate("waiterId");
 
+      io.to(`kitchen_${order.restaurantId}`).emit(
+        "kitchen_orders_updated",
+        kitchenOrders
+      );
+      io.to(`cashier_${order.restaurantId}`).emit(
+        "kitchen_orders_updated",
+        kitchenOrders
+      );
       io.to("kitchen").emit("kitchen_orders_updated", kitchenOrders);
       io.to("cashier").emit("kitchen_orders_updated", kitchenOrders);
 
       // Ofitsiyantga tasdiqlash
-      io.to(`waiter_${order.waiterId}`).emit("order_served_confirmed", {
-        orderId: order._id,
-      });
+      if (order.waiterId) {
+        io.to(`waiter_${order.waiterId}`).emit("order_served_confirmed", {
+          orderId: order._id,
+        });
+      }
     } catch (error) {
       console.error("Order served error:", error);
     }
@@ -304,13 +462,15 @@ io.on("connection", (socket) => {
       }
       await order.save();
 
-      // To'lovni SaveOrder ga ham saqlash (admin panel hisobotlari uchun)
+      // Order statusini ham yangilash
+      await Order.findByIdAndUpdate(order.orderId, { status: "paid" });
+
+      // To'lovni SaveOrder ga saqlash
       const totalPrice = order.items.reduce(
-        (sum, item) => sum + (item.price * item.quantity),
+        (sum, item) => sum + item.price * item.quantity,
         0
       );
 
-      // To'lov turini aniqlash
       let paymentStatus = "Naqt toladi";
       if (paymentMethod === "card") {
         paymentStatus = "Plastik Karta";
@@ -337,54 +497,50 @@ io.on("connection", (socket) => {
       });
 
       // Kassaga xabar
+      io.to(`cashier_${order.restaurantId}`).emit("order_paid_success", {
+        orderId: order._id,
+        tableName: order.tableName,
+      });
       io.to("cashier").emit("order_paid_success", {
         orderId: order._id,
         tableName: order.tableName,
       });
 
-      // Barcha oshpazlarga yangilangan ma'lumot
       const kitchenOrders = await KitchenOrder.find({
+        restaurantId: order.restaurantId,
         status: { $in: ["pending", "preparing", "ready"] },
       })
         .sort({ createdAt: 1 })
         .populate("waiterId");
 
+      io.to(`kitchen_${order.restaurantId}`).emit(
+        "kitchen_orders_updated",
+        kitchenOrders
+      );
       io.to("kitchen").emit("kitchen_orders_updated", kitchenOrders);
     } catch (error) {
       console.error("Mark paid error:", error);
     }
   });
 
-  // Karaoke
-  socket.on("post_karaoke", async (data) => {
-    try {
-      await Karaoke.create(data);
-      console.log(data);
-      const karaoke = await Karaoke.find();
-      socket.broadcast.emit("get_karaoke", karaoke);
-      io.to(socket.id).emit("get_message", { msg: "success" });
-    } catch (error) {
-      io.to(socket.id).emit("get_message", { msg: "error" });
-    }
-  });
-
-  // Call
+  // Ofitsiyantni chaqirish
   socket.on("call", async (data) => {
     try {
-      await Call.create(data);
-      const call = await Call.find();
-      socket.broadcast.emit("call-info", call);
-      io.to(socket.id).emit("call-response", { msg: "successfully" });
+      const callData = await Call.create(data);
+      const calls = await Call.find({ restaurantId: data.restaurantId });
+
+      io.to(`restaurant_${data.restaurantId}`).emit("call-info", calls);
+      socket.broadcast.emit("call-info", calls);
+      socket.emit("call-response", { msg: "successfully" });
     } catch (error) {
-      io.to(socket.id).emit("call-response", { msg: "error" });
+      socket.emit("call-response", { msg: "error" });
     }
   });
 
   // Disconnect
   socket.on("disconnect", async () => {
     try {
-      // Ofitsiyantni offline qilish
-      await Waiter.findOneAndUpdate(
+      await Staff.findOneAndUpdate(
         { socketId: socket.id },
         { isOnline: false, socketId: null }
       );
@@ -395,34 +551,49 @@ io.on("connection", (socket) => {
   });
 });
 
-mongoose.set("strictQuery", false);
-
+// Middleware
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-app.use(require("./routers/category"));
-app.use(require("./routers/food"));
-app.use(require("./routers/dosage"));
-app.use(require("./routers/table"));
-app.use(require("./routers/order"));
-app.use(require("./routers/saveOrders"));
-app.use(require("./routers/debt"));
-app.use(require("./routers/service"));
-app.use(require("./routers/discount"));
-app.use(require("./routers/saved"));
-app.use(require("./routers/service-dj"));
-app.use(require("./routers/music"));
-app.use(require("./routers/karaoke"));
-app.use(require("./routers/call"));
-app.use(require("./routers/waiter"));
-app.use(require("./routers/kitchen-order"));
+// Yangi API routerlar
+app.use("/api", require("./routers/super-admin"));
+app.use("/api", require("./routers/restaurant-admin"));
+app.use("/api", require("./routers/qr-session"));
+app.use("/api", require("./routers/staff"));
+app.use("/api", require("./routers/menu")); // QR session uchun menu
+
+// Mavjud routerlar - /api prefiksi bilan
+app.use("/api", require("./routers/category"));
+app.use("/api", require("./routers/food"));
+app.use("/api", require("./routers/dosage"));
+app.use("/api", require("./routers/table"));
+app.use("/api", require("./routers/order"));
+app.use("/api", require("./routers/saveOrders"));
+app.use("/api", require("./routers/debt"));
+app.use("/api", require("./routers/service"));
+app.use("/api", require("./routers/discount"));
+app.use("/api", require("./routers/saved"));
+app.use("/api", require("./routers/call"));
+app.use("/api", require("./routers/waiter"));
+app.use("/api", require("./routers/kitchen-order"));
 app.use(fileUpload());
 
 app.use(express.static("public"));
+
 app.get("/", (req, res) => {
-  res.send("asdsa");
+  res.json({ message: "Restaurant API Server", version: "2.0" });
 });
 
-server.listen(process.env.PORT, () => {
-  console.log(`Server is running on port ${process.env.PORT}`);
+app.get("/restaurant", async (req, res) => {
+  try {
+    const restaurants = await Restaurant.find();
+    res.status(200).json({ status: "success", data: restaurants });
+  } catch (error) {
+    res.status(500).json({ status: "error", message: error.message });
+  }
+});
+
+const PORT = process.env.PORT || 5000;
+server.listen(PORT, () => {
+  console.log(`Server is running on port ${PORT}`);
 });
