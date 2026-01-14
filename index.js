@@ -592,6 +592,7 @@ app.use("/api", require("./routers/restaurant-admin"));
 app.use("/api", require("./routers/qr-session"));
 app.use("/api", require("./routers/staff"));
 app.use("/api", require("./routers/menu")); // QR session uchun menu
+app.use("/api", require("./routers/landing-contact")); // Landing page kontaktlar
 
 // Mavjud routerlar - /api prefiksi bilan
 app.use("/api", require("./routers/category"));
