@@ -67,7 +67,7 @@ router.post("/foods-create", cors(), authenticateRestaurantAdmin, upload.single(
   }
 });
 
-router.post("/edit-food/:id", cors(), authenticateRestaurantAdmin, async (req, res) => {
+router.post("/edit-food/:id", cors(), authenticateRestaurantAdmin, upload.single("image"), async (req, res) => {
   try {
     const id = req.params.id;
     // Faqat o'z restoranining taomini tahrirlash
@@ -75,7 +75,22 @@ router.post("/edit-food/:id", cors(), authenticateRestaurantAdmin, async (req, r
     if (!food) {
       return res.status(404).json({ error: "Taom topilmadi" });
     }
-    await Food.findByIdAndUpdate(id, req.body);
+
+    // Yangi rasm yuklangan bo'lsa
+    const updateData = { ...req.body };
+    if (req.file) {
+      updateData.image = `/images/foods/${req.file.filename}`;
+
+      // Eski rasmni o'chirish (agar local rasm bo'lsa)
+      if (food.image && food.image.startsWith('/images/foods/')) {
+        const oldImagePath = path.join(__dirname, "../public", food.image);
+        if (fs.existsSync(oldImagePath)) {
+          fs.unlinkSync(oldImagePath);
+        }
+      }
+    }
+
+    await Food.findByIdAndUpdate(id, updateData);
     const data = await Food.find({ restaurantId: req.restaurantId });
     res.json({ data: data });
   } catch (error) {
