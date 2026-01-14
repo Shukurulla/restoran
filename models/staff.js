@@ -1,5 +1,4 @@
 const mongoose = require("mongoose");
-const bcrypt = require("bcryptjs");
 
 const staffSchema = mongoose.Schema(
   {
@@ -53,16 +52,9 @@ const staffSchema = mongoose.Schema(
   { timestamps: true }
 );
 
-// Parolni hash qilish
-staffSchema.pre("save", async function (next) {
-  if (!this.isModified("password")) return next();
-  this.password = await bcrypt.hash(this.password, 10);
-  next();
-});
-
-// Parolni tekshirish
+// Parolni tekshirish (plain text compare)
 staffSchema.methods.comparePassword = async function (candidatePassword) {
-  return bcrypt.compare(candidatePassword, this.password);
+  return this.password === candidatePassword;
 };
 
 // Index - ishlayotgan xodimlarni tezroq topish uchun

@@ -111,13 +111,17 @@ router.get(
   }
 );
 
-// Yangi xodim qo'shish (faqat ofitsiant)
+// Yangi xodim qo'shish (waiter, cook, cashier)
 router.post(
   "/restaurant-admin/staff",
   authenticateRestaurantAdmin,
   async (req, res) => {
     try {
-      const { firstName, lastName, phone, password } = req.body;
+      const { firstName, lastName, phone, password, role } = req.body;
+
+      // Role validatsiya
+      const validRoles = ["waiter", "cook", "cashier"];
+      const staffRole = validRoles.includes(role) ? role : "waiter";
 
       // Telefon raqami boshqa restoranda ishlamoqdami tekshirish
       const existingStaff = await Staff.findOne({ phone, status: "working" });
@@ -135,7 +139,7 @@ router.post(
         lastName,
         phone,
         password,
-        role: "waiter", // Faqat ofitsiant qo'shish mumkin
+        role: staffRole,
       });
 
       res.json({
@@ -264,7 +268,7 @@ router.patch(
   }
 );
 
-// Xodimni o'chirish
+// Xodimni o'chirish (waiter, cook, cashier)
 router.delete(
   "/restaurant-admin/staff/:staffId",
   authenticateRestaurantAdmin,
@@ -277,13 +281,6 @@ router.delete(
 
       if (!staff) {
         return res.status(404).json({ error: "Xodim topilmadi" });
-      }
-
-      // Povar va kassirni o'chirishga ruxsat bermaslik
-      if (["cook", "cashier"].includes(staff.role)) {
-        return res.status(400).json({
-          error: "Povar va kassirni o'chirish mumkin emas",
-        });
       }
 
       await staff.deleteOne();

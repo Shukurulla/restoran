@@ -611,6 +611,7 @@ app.use("/api", require("./routers/kitchen-order"));
 app.use(fileUpload());
 
 app.use(express.static("public"));
+app.use("/uploads", express.static("uploads"));
 
 app.get("/", (req, res) => {
   res.json({ message: "Restaurant API Server", version: "2.0" });
