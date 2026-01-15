@@ -50,6 +50,12 @@ router.get(
         tableId: table._id,
         tableName: table.title,
         tableNumber: table.tableNumber,
+        table: {
+          id: table._id,
+          title: table.title,
+          tableNumber: table.tableNumber,
+          surcharge: table.surcharge,
+        },
         restaurant: {
           id: restaurant._id,
           name: restaurant.name,
