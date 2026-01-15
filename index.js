@@ -38,6 +38,9 @@ const io = new Server(server, {
 // Default super admin yaratish
 const createDefaultSuperAdmin = require("./seeds/super-admin.seed");
 
+// Demo restoran yaratish va reset
+const { createDemoRestaurant, resetDemoData } = require("./seeds/demo-restaurant.seed");
+
 // MongoDB ulanish
 mongoose
   .connect(process.env.MONGO_URI, {
@@ -48,6 +51,20 @@ mongoose
     console.log("Database connected");
     // Default super admin yaratish
     await createDefaultSuperAdmin();
+
+    // Demo restoran yaratish (agar yo'q bo'lsa)
+    try {
+      await createDemoRestaurant();
+      console.log("Demo restoran tayyor!");
+
+      // Har 1 soatda demo ma'lumotlarni reset qilish
+      setInterval(async () => {
+        await resetDemoData();
+      }, 60 * 60 * 1000); // 1 soat = 60 daqiqa * 60 sekund * 1000 millisekund
+
+    } catch (error) {
+      console.error("Demo restoran yaratishda xato:", error);
+    }
   })
   .catch((err) => {
     console.error("Database connection error:", err);
@@ -608,6 +625,7 @@ app.use("/api", require("./routers/saved"));
 app.use("/api", require("./routers/call"));
 app.use("/api", require("./routers/waiter"));
 app.use("/api", require("./routers/kitchen-order"));
+app.use("/api", require("./routers/demo")); // Demo API endpoints
 app.use(fileUpload());
 
 app.use(express.static("public"));
