@@ -39,28 +39,33 @@ router.get("/kitchen-orders/today", cors(), async (req, res) => {
 router.get("/kitchen-orders/waiter/:waiterId", cors(), async (req, res) => {
   try {
     const { waiterId } = req.params;
-    const { date } = req.query; // YYYY-MM-DD format
+    const { date, showPaid } = req.query; // YYYY-MM-DD format, showPaid=true for history
 
-    let startOfDay, endOfDay;
+    let filter = { waiterId: waiterId };
 
-    if (date) {
-      // Tanlangan sana
-      startOfDay = new Date(date);
-      startOfDay.setHours(0, 0, 0, 0);
-      endOfDay = new Date(date);
-      endOfDay.setHours(23, 59, 59, 999);
-    } else {
-      // Bugun
-      startOfDay = new Date();
-      startOfDay.setHours(0, 0, 0, 0);
-      endOfDay = new Date();
-      endOfDay.setHours(23, 59, 59, 999);
+    // Agar showPaid=true bo'lmasa, faqat to'lanmagan (faol) buyurtmalarni ko'rsatish
+    if (showPaid !== 'true') {
+      filter.isPaid = false;
     }
 
-    const orders = await KitchenOrder.find({
-      waiterId: waiterId,
-      createdAt: { $gte: startOfDay, $lte: endOfDay },
-    }).sort({ createdAt: -1 });
+    // Sana bo'yicha filter
+    if (date) {
+      // Tanlangan sana
+      const startOfDay = new Date(date);
+      startOfDay.setHours(0, 0, 0, 0);
+      const endOfDay = new Date(date);
+      endOfDay.setHours(23, 59, 59, 999);
+      filter.createdAt = { $gte: startOfDay, $lte: endOfDay };
+    } else if (showPaid !== 'true') {
+      // Bugun - faqat faol buyurtmalar uchun
+      const startOfDay = new Date();
+      startOfDay.setHours(0, 0, 0, 0);
+      const endOfDay = new Date();
+      endOfDay.setHours(23, 59, 59, 999);
+      filter.createdAt = { $gte: startOfDay, $lte: endOfDay };
+    }
+
+    const orders = await KitchenOrder.find(filter).sort({ createdAt: -1 });
 
     res.json({ data: orders });
   } catch (error) {
