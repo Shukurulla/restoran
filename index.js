@@ -183,6 +183,29 @@ io.on("connection", async (socket) => {
         socket.join(`waiter_${queryStaffId}`);
         socket.join(`restaurant_${queryRestaurantId}`);
         console.log(`Waiter ${queryStaffId} auto-joined rooms from query params`);
+
+        // Waiter'ga ulanish tasdiqlangan deb xabar yuborish
+        socket.emit("connection_established", {
+          success: true,
+          waiterId: queryStaffId,
+          waiterName: `${waiter.firstName} ${waiter.lastName}`,
+          restaurantId: queryRestaurantId,
+          message: "Serverga muvaffaqiyatli ulandi!",
+        });
+        console.log(`Connection established event sent to waiter ${queryStaffId}`);
+
+        // Push notification yuborish (app ochiq bo'lsa ham test uchun)
+        if (waiter.fcmToken) {
+          sendPushNotification(
+            waiter.fcmToken,
+            "Serverga ulandi!",
+            `${waiter.firstName}, siz serverga muvaffaqiyatli ulandingiz!`,
+            { type: "connection_established", waiterId: queryStaffId }
+          );
+          console.log(`Push notification sent to waiter ${queryStaffId}`);
+        } else {
+          console.log(`Waiter ${queryStaffId} has no FCM token`);
+        }
       }
     } catch (error) {
       console.error("Auto-join waiter error:", error);
