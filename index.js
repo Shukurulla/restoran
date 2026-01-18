@@ -913,6 +913,23 @@ io.on("connection", async (socket) => {
         type: "bell_call",
       });
 
+      // WaiterNotification ga ham saqlash (vazifalar sahifasi uchun)
+      try {
+        await WaiterNotification.create({
+          waiterId: waiter._id,
+          restaurantId,
+          orderId: null,
+          type: "waiter_call",
+          tableName: tableName || table.title,
+          tableNumber: table.tableNumber || 0,
+          message: `${tableName || table.title} dan chaqiruv!`,
+          items: [],
+        });
+        console.log(`WaiterNotification saved for waiter_call: ${tableName || table.title}`);
+      } catch (saveErr) {
+        console.error("WaiterNotification save error (waiter_call):", saveErr);
+      }
+
       socket.emit("call_waiter_response", {
         success: true,
         waiter: {

@@ -185,7 +185,7 @@ router.get("/staff/colleagues", authenticateStaff, async (req, res) => {
 router.get("/staff/:staffId/notifications", async (req, res) => {
   try {
     const { staffId } = req.params;
-    const { status } = req.query; // 'pending', 'completed', 'all'
+    const { status, date } = req.query; // 'pending', 'completed', 'all' va 'date' (YYYY-MM-DD)
 
     let filter = { waiterId: staffId };
 
@@ -195,9 +195,18 @@ router.get("/staff/:staffId/notifications", async (req, res) => {
       filter.isCompleted = true;
     }
 
+    // Sana bo'yicha filter
+    if (date) {
+      const startOfDay = new Date(date);
+      startOfDay.setHours(0, 0, 0, 0);
+      const endOfDay = new Date(date);
+      endOfDay.setHours(23, 59, 59, 999);
+      filter.createdAt = { $gte: startOfDay, $lte: endOfDay };
+    }
+
     const notifications = await WaiterNotification.find(filter)
       .sort({ createdAt: -1 })
-      .limit(50);
+      .limit(100);
 
     res.json({
       success: true,

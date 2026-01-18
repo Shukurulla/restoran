@@ -39,12 +39,27 @@ router.get("/kitchen-orders/today", cors(), async (req, res) => {
 router.get("/kitchen-orders/waiter/:waiterId", cors(), async (req, res) => {
   try {
     const { waiterId } = req.params;
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    const { date } = req.query; // YYYY-MM-DD format
+
+    let startOfDay, endOfDay;
+
+    if (date) {
+      // Tanlangan sana
+      startOfDay = new Date(date);
+      startOfDay.setHours(0, 0, 0, 0);
+      endOfDay = new Date(date);
+      endOfDay.setHours(23, 59, 59, 999);
+    } else {
+      // Bugun
+      startOfDay = new Date();
+      startOfDay.setHours(0, 0, 0, 0);
+      endOfDay = new Date();
+      endOfDay.setHours(23, 59, 59, 999);
+    }
 
     const orders = await KitchenOrder.find({
       waiterId: waiterId,
-      createdAt: { $gte: today },
+      createdAt: { $gte: startOfDay, $lte: endOfDay },
     }).sort({ createdAt: -1 });
 
     res.json({ data: orders });
