@@ -492,6 +492,18 @@ io.on("connection", async (socket) => {
       // Mijozga javob
       socket.emit("get_message", { msg: "success", orderId: order._id });
 
+      // BARCHA WAITER'LARGA XABAR YUBORISH (restaurant_${restaurantId} room orqali)
+      console.log(`Broadcasting new_order to restaurant_${restaurantId}`);
+      io.to(`restaurant_${restaurantId}`).emit("new_order", {
+        order: kitchenOrder,
+        tableName,
+        tableNumber,
+        isNewOrder,
+        message: isNewOrder
+          ? `${tableName} dan yangi buyurtma keldi!`
+          : `${tableName} ga yangi buyurtma qo'shildi!`,
+      });
+
       // Oshpazlarga xabar
       const kitchenOrders = await KitchenOrder.find({
         restaurantId,
