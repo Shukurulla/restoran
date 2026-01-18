@@ -399,6 +399,32 @@ io.on("connection", async (socket) => {
             kitchenOrder.allItemsReady = false;
           }
           await kitchenOrder.save();
+
+          // Mavjud orderga qo'shilganda ham waiter'ga xabar yuborish
+          if (kitchenOrder.waiterId) {
+            const waiter = await Staff.findById(kitchenOrder.waiterId);
+            if (waiter) {
+              console.log(`Sending new_order_items to waiter ${waiter._id}`);
+              io.to(`waiter_${waiter._id}`).emit("new_order_items", {
+                order: kitchenOrder,
+                tableName,
+                tableNumber,
+                newItems: newItems,
+                message: `${tableName} ga yangi buyurtma qo'shildi!`,
+              });
+
+              // Push notification yuborish
+              if (waiter.fcmToken) {
+                console.log(`Sending push notification for new items to waiter ${waiter._id}`);
+                sendPushNotification(
+                  waiter.fcmToken,
+                  "Yangi buyurtma qo'shildi!",
+                  `${tableName} ga yangi buyurtma qo'shildi`,
+                  { type: "new_order_items", orderId: kitchenOrder._id.toString() }
+                );
+              }
+            }
+          }
         }
       } else {
         // Yangi order yaratish
@@ -438,21 +464,28 @@ io.on("connection", async (socket) => {
 
         // Ofitsiyantga xabar
         if (assignedWaiter) {
+          console.log(`Sending new_table_assigned to waiter ${assignedWaiter._id}`);
           io.to(`waiter_${assignedWaiter._id}`).emit("new_table_assigned", {
             order: kitchenOrder,
             tableName,
             tableNumber,
+            message: `${tableName} dan yangi buyurtma keldi!`,
           });
 
           // Push notification yuborish (app yopiq bo'lsa ham)
           if (assignedWaiter.fcmToken) {
+            console.log(`Sending push notification for new table to waiter ${assignedWaiter._id}`);
             sendPushNotification(
               assignedWaiter.fcmToken,
               "Yangi buyurtma!",
               `${tableName} dan yangi buyurtma keldi`,
               { type: "new_table_assigned", orderId: kitchenOrder._id.toString() }
             );
+          } else {
+            console.log(`Waiter ${assignedWaiter._id} has no FCM token for new_table_assigned`);
           }
+        } else {
+          console.log(`No waiter assigned for table ${tableName}`);
         }
       }
 
