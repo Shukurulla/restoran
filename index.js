@@ -191,9 +191,20 @@ io.on("connection", (socket) => {
     }
   });
 
-  // Legacy support - eski panellar uchun
-  socket.on("waiter_connect", async (waiterId) => {
+  // Legacy support - eski panellar uchun (string yoki object qabul qiladi)
+  socket.on("waiter_connect", async (data) => {
     try {
+      // String yoki object bo'lishi mumkin
+      const waiterId = typeof data === 'string' ? data : data?.waiterId;
+      const restaurantId = typeof data === 'object' ? data?.restaurantId : null;
+
+      if (!waiterId) {
+        console.error("Waiter connect: waiterId is missing");
+        return;
+      }
+
+      console.log(`Waiter connect: waiterId=${waiterId}, restaurantId=${restaurantId}`);
+
       const waiter = await Staff.findByIdAndUpdate(
         waiterId,
         { socketId: socket.id, isOnline: true },
@@ -202,6 +213,7 @@ io.on("connection", (socket) => {
       if (waiter) {
         socket.join(`waiter_${waiterId}`);
         socket.join(`restaurant_${waiter.restaurantId}`);
+        console.log(`Waiter ${waiterId} joined rooms: waiter_${waiterId}, restaurant_${waiter.restaurantId}`);
       }
     } catch (error) {
       console.error("Waiter connect error:", error);
