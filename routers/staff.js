@@ -139,6 +139,30 @@ router.patch("/staff/online-status", authenticateStaff, async (req, res) => {
   }
 });
 
+// FCM tokenni yangilash
+router.patch("/staff/:staffId/fcm-token", async (req, res) => {
+  try {
+    const { staffId } = req.params;
+    const { fcmToken } = req.body;
+
+    const staff = await Staff.findByIdAndUpdate(
+      staffId,
+      { fcmToken: fcmToken || null },
+      { new: true }
+    );
+
+    if (!staff) {
+      return res.status(404).json({ error: "Xodim topilmadi" });
+    }
+
+    console.log(`FCM token updated for staff ${staffId}: ${fcmToken ? 'set' : 'cleared'}`);
+    res.json({ success: true });
+  } catch (error) {
+    console.error("Update FCM token error:", error);
+    res.status(500).json({ error: "Server xatosi" });
+  }
+});
+
 // Restoran xodimlari (bitta restoran ichida)
 router.get("/staff/colleagues", authenticateStaff, async (req, res) => {
   try {

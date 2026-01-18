@@ -42,6 +42,11 @@ const staffSchema = mongoose.Schema(
       type: String,
       default: null,
     },
+    // Firebase Cloud Messaging token
+    fcmToken: {
+      type: String,
+      default: null,
+    },
     assignedTables: [
       {
         type: mongoose.Schema.Types.ObjectId,

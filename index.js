@@ -17,7 +17,13 @@ const Table = require("./models/table");
 const QRSession = require("./models/qr-session");
 const Food = require("./models/foods");
 
+// Firebase Service
+const { initializeFirebase, sendPushNotification } = require("./services/firebase.service");
+
 require("dotenv").config();
+
+// Firebase'ni initialize qilish
+initializeFirebase();
 
 // CORS
 app.use(
@@ -391,6 +397,16 @@ io.on("connection", async (socket) => {
             tableName,
             tableNumber,
           });
+
+          // Push notification yuborish (app yopiq bo'lsa ham)
+          if (assignedWaiter.fcmToken) {
+            sendPushNotification(
+              assignedWaiter.fcmToken,
+              "Yangi buyurtma!",
+              `${tableName} dan yangi buyurtma keldi`,
+              { type: "new_table_assigned", orderId: kitchenOrder._id.toString() }
+            );
+          }
         }
       }
 
@@ -525,6 +541,17 @@ io.on("connection", async (socket) => {
           order: order,
           message: `${order.tableName} uchun buyurtma tayyor!`,
         });
+
+        // Push notification yuborish
+        const waiter = await Staff.findById(order.waiterId);
+        if (waiter?.fcmToken) {
+          sendPushNotification(
+            waiter.fcmToken,
+            "Buyurtma tayyor!",
+            `${order.tableName} uchun buyurtma tayyor - olib boring!`,
+            { type: "order_ready", orderId: order._id.toString() }
+          );
+        }
       }
 
       // Yangilangan ma'lumot
@@ -730,6 +757,16 @@ io.on("connection", async (socket) => {
         tableNumber: table.tableNumber,
         message: `${tableName || table.title} dan chaqiruv!`,
       });
+
+      // Push notification yuborish (app yopiq bo'lsa ham)
+      if (waiter.fcmToken) {
+        sendPushNotification(
+          waiter.fcmToken,
+          "Mijoz chaqirmoqda!",
+          `${tableName || table.title} sizni chaqirmoqda!`,
+          { type: "waiter_called", tableId }
+        );
+      }
 
       // Call recordini saqlash
       await Call.create({
