@@ -610,22 +610,21 @@ io.on("connection", async (socket) => {
       io.to("kitchen").emit("kitchen_orders_updated", kitchenOrders);
       io.to("cashier").emit("kitchen_orders_updated", kitchenOrders);
 
-      // Waiter'ga ham xabar yuborish - item tayyor bo'lganda
+      // Waiter'ga ham xabar yuborish - faqat shu paytda tayyor bo'lgan 1 ta taom
       if (order.waiterId && item.isReady) {
-        const readyItems = order.items.filter(i => i.isReady);
         io.to(`waiter_${order.waiterId}`).emit("order_ready_notification", {
           orderId: order._id.toString(),
           tableName: order.tableName,
           tableNumber: order.tableNumber || 0,
           message: `${order.tableName}: ${item.foodName} tayyor!`,
-          items: readyItems.map(i => ({
-            foodName: i.foodName,
-            quantity: i.quantity,
-            isReady: i.isReady
-          })),
+          items: [{
+            foodName: item.foodName,
+            quantity: item.quantity,
+            isReady: true
+          }],
           allReady: allReady,
         });
-        console.log(`Item ready notification sent to waiter_${order.waiterId}`);
+        console.log(`Item ready notification sent to waiter_${order.waiterId}: ${item.foodName}`);
       }
     } catch (error) {
       console.error("Item ready error:", error);
