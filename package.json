@@ -25,6 +25,7 @@
     "express-upload": "^0.1.0",
     "express-useragent": "^1.0.15",
     "filereader": "^0.10.3",
+    "firebase-admin": "^13.6.0",
     "googleapis": "^130.0.0",
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^7.6.3",

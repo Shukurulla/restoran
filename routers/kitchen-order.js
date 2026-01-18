@@ -35,13 +35,25 @@ router.get("/kitchen-orders/today", cors(), async (req, res) => {
   }
 });
 
-// Ofitsiyant uchun orderlar
+// Ofitsiyant uchun orderlar (restoran bo'yicha)
 router.get("/kitchen-orders/waiter/:waiterId", cors(), async (req, res) => {
   try {
     const { waiterId } = req.params;
-    const { date, showPaid } = req.query; // YYYY-MM-DD format, showPaid=true for history
+    const { date, showPaid, restaurantId } = req.query; // YYYY-MM-DD format, showPaid=true for history
 
-    let filter = { waiterId: waiterId };
+    // Waiter'ning restaurantId sini olish
+    const Staff = require("../models/staff");
+    const waiter = await Staff.findById(waiterId);
+
+    if (!waiter) {
+      return res.status(404).json({ error: "Waiter not found" });
+    }
+
+    // RestaurantId - query'dan yoki waiter'dan
+    const effectiveRestaurantId = restaurantId || waiter.restaurantId;
+
+    // Restoran bo'yicha filter (waiterId emas!)
+    let filter = { restaurantId: effectiveRestaurantId };
 
     // Agar showPaid=true bo'lmasa, faqat to'lanmagan (faol) buyurtmalarni ko'rsatish
     if (showPaid !== 'true') {
@@ -65,10 +77,15 @@ router.get("/kitchen-orders/waiter/:waiterId", cors(), async (req, res) => {
       filter.createdAt = { $gte: startOfDay, $lte: endOfDay };
     }
 
+    console.log(`Getting orders for waiter ${waiterId}, restaurantId: ${effectiveRestaurantId}, filter:`, filter);
+
     const orders = await KitchenOrder.find(filter).sort({ createdAt: -1 });
+
+    console.log(`Found ${orders.length} orders for restaurant ${effectiveRestaurantId}`);
 
     res.json({ data: orders });
   } catch (error) {
+    console.error("Get waiter orders error:", error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -215,11 +232,14 @@ router.get("/waiter/:waiterId/stats", cors(), async (req, res) => {
       return res.status(404).json({ error: "Waiter not found" });
     }
 
-    // Shu restoranning BARCHA buyurtmalarini olish
+    // Shu restoranning BARCHA to'lanmagan buyurtmalarini olish
     const orders = await KitchenOrder.find({
       restaurantId: waiter.restaurantId,
       createdAt: { $gte: today },
+      isPaid: false, // Faqat to'lanmagan (faol) buyurtmalar
     });
+
+    console.log(`Stats for waiter ${waiterId}, restaurant ${waiter.restaurantId}: ${orders.length} active orders found`);
 
     const stats = {
       totalOrders: orders.length,
@@ -257,7 +277,10 @@ router.get("/waiter/:waiterId/active-tables", cors(), async (req, res) => {
       restaurantId: waiter.restaurantId,
       createdAt: { $gte: today },
       status: { $in: ["pending", "preparing", "ready"] },
+      isPaid: false, // Faqat to'lanmagan buyurtmalar
     }).sort({ createdAt: -1 });
+
+    console.log(`Active tables for waiter ${waiterId}, restaurant ${waiter.restaurantId}: ${orders.length} orders found`);
 
     // Stollar bo'yicha guruhlash
     const tablesMap = {};
