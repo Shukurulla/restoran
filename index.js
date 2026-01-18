@@ -15,6 +15,7 @@ const Call = require("./models/call.js");
 const Restaurant = require("./models/restaurant");
 const Table = require("./models/table");
 const QRSession = require("./models/qr-session");
+const Food = require("./models/foods");
 
 require("dotenv").config();
 
@@ -73,8 +74,19 @@ mongoose
 mongoose.set("strictQuery", false);
 
 // Bo'sh ofitsiyantni topish va tayinlash (multi-tenant)
-async function assignWaiterToOrder(restaurantId, tableId) {
+// Stolga biriktirilgan waiter bo'lsa - uni qaytarish
+// Aks holda eng kam ish yukiga ega waiter tanlash
+async function assignWaiterToTable(restaurantId, tableId) {
   try {
+    // Avval stolga biriktirilgan waiterni tekshirish
+    const table = await Table.findById(tableId);
+    if (table && table.assignedWaiterId) {
+      const assignedWaiter = await Staff.findById(table.assignedWaiterId);
+      if (assignedWaiter && assignedWaiter.status === "working") {
+        return assignedWaiter;
+      }
+    }
+
     // Shu restoranning faol va online ofitsiyantlarini olish
     const availableWaiters = await Staff.find({
       restaurantId,
@@ -94,7 +106,16 @@ async function assignWaiterToOrder(restaurantId, tableId) {
 
       // Random tanlash
       const randomIndex = Math.floor(Math.random() * activeWaiters.length);
-      return activeWaiters[randomIndex];
+      const selectedWaiter = activeWaiters[randomIndex];
+
+      // Stolga waiter biriktirish
+      if (table) {
+        table.assignedWaiterId = selectedWaiter._id;
+        table.status = "occupied";
+        await table.save();
+      }
+
+      return selectedWaiter;
     }
 
     // Har bir ofitsiyantning bugungi tayinlangan stollar sonini hisoblash
@@ -115,11 +136,25 @@ async function assignWaiterToOrder(restaurantId, tableId) {
 
     // Eng kam ish yukiga ega ofitsiyantni tanlash
     waiterWorkloads.sort((a, b) => a.activeOrders - b.activeOrders);
-    return waiterWorkloads[0].waiter;
+    const selectedWaiter = waiterWorkloads[0].waiter;
+
+    // Stolga waiter biriktirish
+    if (table) {
+      table.assignedWaiterId = selectedWaiter._id;
+      table.status = "occupied";
+      await table.save();
+    }
+
+    return selectedWaiter;
   } catch (error) {
     console.error("Ofitsiyant tayinlashda xato:", error);
     return null;
   }
+}
+
+// Legacy support
+async function assignWaiterToOrder(restaurantId, tableId) {
+  return assignWaiterToTable(restaurantId, tableId);
 }
 
 // Socket.io
@@ -371,17 +406,43 @@ io.on("connection", (socket) => {
 
       if (!order) return;
 
-      order.items[itemIndex].isReady = !order.items[itemIndex].isReady;
-      order.items[itemIndex].readyAt = order.items[itemIndex].isReady
-        ? new Date()
-        : null;
+      const item = order.items[itemIndex];
+      const wasReady = item.isReady;
+      item.isReady = !item.isReady;
 
-      const allReady = order.items.every((item) => item.isReady);
+      if (item.isReady) {
+        // Tayyor bo'lganda - vaqtni hisoblash
+        item.readyAt = new Date();
+        const addedAt = item.addedAt || order.createdAt;
+        const cookingTimeSeconds = Math.floor((item.readyAt - addedAt) / 1000);
+        item.cookingTime = cookingTimeSeconds;
+
+        // Food'ning ortacha tayyorlash vaqtini yangilash
+        if (item.foodId) {
+          try {
+            const food = await Food.findById(item.foodId);
+            if (food) {
+              food.cookingTimeCount = (food.cookingTimeCount || 0) + 1;
+              food.cookingTimeTotal = (food.cookingTimeTotal || 0) + cookingTimeSeconds;
+              food.averageCookingTime = Math.round(food.cookingTimeTotal / food.cookingTimeCount);
+              await food.save();
+            }
+          } catch (err) {
+            console.error("Food cooking time update error:", err);
+          }
+        }
+      } else {
+        // Tayyor emas deb belgilanganda
+        item.readyAt = null;
+        item.cookingTime = null;
+      }
+
+      const allReady = order.items.every((i) => i.isReady);
       order.allItemsReady = allReady;
 
       if (allReady) {
         order.status = "ready";
-      } else if (order.items.some((item) => item.isReady)) {
+      } else if (order.items.some((i) => i.isReady)) {
         order.status = "preparing";
       } else {
         order.status = "pending";
@@ -389,12 +450,12 @@ io.on("connection", (socket) => {
 
       await order.save();
 
-      // Yangilangan ma'lumotni yuborish
+      // Yangilangan ma'lumotni yuborish - KO'P KUTILGANLAR BIRINCHI
       const kitchenOrders = await KitchenOrder.find({
         restaurantId: order.restaurantId,
         status: { $in: ["pending", "preparing", "ready"] },
       })
-        .sort({ createdAt: 1 })
+        .sort({ createdAt: 1 }) // Eng eski (ko'p kutilgan) birinchi
         .populate("waiterId");
 
       io.to(`kitchen_${order.restaurantId}`).emit(
@@ -513,6 +574,14 @@ io.on("connection", (socket) => {
       // Order statusini ham yangilash
       await Order.findByIdAndUpdate(order.orderId, { status: "paid" });
 
+      // Stolni bo'shatish va waiter'ni o'chirish
+      if (order.tableId) {
+        await Table.findByIdAndUpdate(order.tableId, {
+          status: "free",
+          assignedWaiterId: null,
+        });
+      }
+
       // To'lovni SaveOrder ga saqlash
       const totalPrice = order.items.reduce(
         (sum, item) => sum + item.price * item.quantity,
@@ -571,7 +640,7 @@ io.on("connection", (socket) => {
     }
   });
 
-  // Ofitsiyantni chaqirish
+  // Ofitsiyantni chaqirish (legacy)
   socket.on("call", async (data) => {
     try {
       const callData = await Call.create(data);
@@ -582,6 +651,173 @@ io.on("connection", (socket) => {
       socket.emit("call-response", { msg: "successfully" });
     } catch (error) {
       socket.emit("call-response", { msg: "error" });
+    }
+  });
+
+  // Yangi: Bell icon - waiter chaqirish va stolga biriktirish
+  socket.on("call_waiter", async (data) => {
+    try {
+      const { restaurantId, tableId, tableName, sessionId } = data;
+
+      // Stolni topish
+      let table = await Table.findById(tableId);
+      if (!table) {
+        socket.emit("call_waiter_response", { success: false, error: "Stol topilmadi" });
+        return;
+      }
+
+      let waiter;
+
+      // Agar stolga waiter biriktirilgan bo'lsa
+      if (table.assignedWaiterId) {
+        waiter = await Staff.findById(table.assignedWaiterId);
+        if (!waiter || waiter.status !== "working") {
+          // Waiter ishlamayapti - yangi waiter tanlash
+          waiter = await assignWaiterToTable(restaurantId, tableId);
+        }
+      } else {
+        // Stolga waiter biriktirilmagan - yangi waiter tanlash
+        waiter = await assignWaiterToTable(restaurantId, tableId);
+      }
+
+      if (!waiter) {
+        socket.emit("call_waiter_response", { success: false, error: "Hozirda bo'sh ofitsiyant yo'q" });
+        return;
+      }
+
+      // Stolni occupied qilish
+      table.status = "occupied";
+      await table.save();
+
+      // Waiter'ga notification yuborish
+      io.to(`waiter_${waiter._id}`).emit("waiter_called", {
+        tableId,
+        tableName: tableName || table.title,
+        tableNumber: table.tableNumber,
+        message: `${tableName || table.title} dan chaqiruv!`,
+      });
+
+      // Call recordini saqlash
+      await Call.create({
+        restaurantId,
+        tableId,
+        tableName: tableName || table.title,
+        waiterId: waiter._id,
+        waiterName: `${waiter.firstName} ${waiter.lastName}`,
+        type: "bell_call",
+      });
+
+      socket.emit("call_waiter_response", {
+        success: true,
+        waiter: {
+          id: waiter._id,
+          name: `${waiter.firstName} ${waiter.lastName}`,
+        },
+      });
+    } catch (error) {
+      console.error("Call waiter error:", error);
+      socket.emit("call_waiter_response", { success: false, error: error.message });
+    }
+  });
+
+  // Buyurtmani bekor qilish (faqat tayyorlanmoqda statusida)
+  socket.on("cancel_order_item", async (data) => {
+    try {
+      const { orderId, itemIndex, sessionId } = data;
+
+      const kitchenOrder = await KitchenOrder.findById(orderId);
+      if (!kitchenOrder) {
+        socket.emit("cancel_order_response", { success: false, error: "Buyurtma topilmadi" });
+        return;
+      }
+
+      // Faqat pending yoki preparing statusda bekor qilish mumkin
+      if (kitchenOrder.status === "ready" || kitchenOrder.status === "served") {
+        socket.emit("cancel_order_response", { success: false, error: "Bu buyurtmani bekor qilib bo'lmaydi" });
+        return;
+      }
+
+      const item = kitchenOrder.items[itemIndex];
+      if (!item) {
+        socket.emit("cancel_order_response", { success: false, error: "Item topilmadi" });
+        return;
+      }
+
+      // Agar item tayyor bo'lsa - bekor qilib bo'lmaydi
+      if (item.isReady) {
+        socket.emit("cancel_order_response", { success: false, error: "Tayyor bo'lgan ovqatni bekor qilib bo'lmaydi" });
+        return;
+      }
+
+      // Itemni o'chirish
+      kitchenOrder.items.splice(itemIndex, 1);
+
+      // Agar barcha itemlar o'chirilgan bo'lsa - orderni cancelled qilish
+      if (kitchenOrder.items.length === 0) {
+        kitchenOrder.status = "served"; // yoki cancelled
+        await Order.findByIdAndUpdate(kitchenOrder.orderId, { status: "cancelled" });
+      }
+
+      await kitchenOrder.save();
+
+      // Oshxonaga xabar
+      const kitchenOrders = await KitchenOrder.find({
+        restaurantId: kitchenOrder.restaurantId,
+        status: { $in: ["pending", "preparing", "ready"] },
+      })
+        .sort({ createdAt: 1 })
+        .populate("waiterId");
+
+      io.to(`kitchen_${kitchenOrder.restaurantId}`).emit("kitchen_orders_updated", kitchenOrders);
+      io.to("kitchen").emit("kitchen_orders_updated", kitchenOrders);
+
+      socket.emit("cancel_order_response", { success: true });
+    } catch (error) {
+      console.error("Cancel order error:", error);
+      socket.emit("cancel_order_response", { success: false, error: error.message });
+    }
+  });
+
+  // Foydalanuvchining orderlarini olish (session bo'yicha)
+  socket.on("get_my_orders", async (data) => {
+    try {
+      const { sessionId, restaurantId, tableId } = data;
+
+      // SessionId orqali yoki tableId orqali orderlarni topish
+      let query = { restaurantId };
+
+      if (sessionId) {
+        const session = await QRSession.findOne({ sessionToken: sessionId });
+        if (session) {
+          query.sessionId = session._id;
+        }
+      }
+
+      if (tableId) {
+        query.tableId = tableId;
+      }
+
+      // Faqat to'lanmagan orderlarni olish
+      query.status = { $nin: ["paid", "cancelled"] };
+
+      const orders = await Order.find(query).sort({ createdAt: -1 });
+
+      // Har bir order uchun kitchen order statusini olish
+      const ordersWithStatus = await Promise.all(
+        orders.map(async (order) => {
+          const kitchenOrder = await KitchenOrder.findOne({ orderId: order._id });
+          return {
+            ...order.toObject(),
+            kitchenStatus: kitchenOrder ? kitchenOrder.status : "pending",
+            items: kitchenOrder ? kitchenOrder.items : [],
+          };
+        })
+      );
+
+      socket.emit("my_orders", ordersWithStatus);
+    } catch (error) {
+      console.error("Get my orders error:", error);
+      socket.emit("my_orders", []);
     }
   });
 

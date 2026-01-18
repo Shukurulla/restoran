@@ -25,6 +25,16 @@ const kitchenOrderItemSchema = new mongoose.Schema({
     type: Date,
     default: null,
   },
+  // Yangi maydonlar - vaqt hisobi uchun
+  addedAt: {
+    type: Date,
+    default: Date.now,
+  },
+  // Tayyorlash vaqti (sekundlarda) - tayyor bo'lganda hisoblanadi
+  cookingTime: {
+    type: Number,
+    default: null,
+  },
 });
 
 const kitchenOrderSchema = new mongoose.Schema(

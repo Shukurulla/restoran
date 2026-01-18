@@ -37,6 +37,20 @@ const foodSchema = mongoose.Schema(
       type: Boolean,
       default: true,
     },
+    // Ortacha tayyorlash vaqti (sekundlarda)
+    averageCookingTime: {
+      type: Number,
+      default: null,
+    },
+    // Tayyorlash vaqtlarini hisoblash uchun
+    cookingTimeCount: {
+      type: Number,
+      default: 0,
+    },
+    cookingTimeTotal: {
+      type: Number,
+      default: 0,
+    },
   },
   { timestamps: true }
 );

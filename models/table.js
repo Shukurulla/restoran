@@ -19,6 +19,18 @@ const tableSchema = mongoose.Schema(
       type: Number,
       required: true,
     },
+    // Stolga biriktirilgan waiter
+    assignedWaiterId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Staff",
+      default: null,
+    },
+    // Stol holati
+    status: {
+      type: String,
+      enum: ["free", "occupied", "reserved"],
+      default: "free",
+    },
   },
   { timestamps: true }
 );
