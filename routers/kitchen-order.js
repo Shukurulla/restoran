@@ -242,18 +242,26 @@ router.get("/waiter/:waiterId/active-tables", cors(), async (req, res) => {
     // Stollar bo'yicha guruhlash
     const tablesMap = {};
     orders.forEach((order) => {
-      if (!tablesMap[order.tableId]) {
-        tablesMap[order.tableId] = {
+      const tableKey = order.tableId?.toString() || order._id.toString();
+      if (!tablesMap[tableKey]) {
+        tablesMap[tableKey] = {
+          _id: order._id,
+          id: order._id.toString(),
           tableId: order.tableId,
           tableName: order.tableName,
           tableNumber: order.tableNumber,
-          orders: [],
+          status: order.status,
+          items: order.items,
+          waiterId: order.waiterId,
+          waiterName: order.waiterName,
+          createdAt: order.createdAt,
           // Qo'shimcha ma'lumot - bu order shu waiter'ga tegishlimi
           isAssignedToMe: order.waiterId?.toString() === waiterId,
         };
       }
-      tablesMap[order.tableId].orders.push(order);
     });
+
+    console.log(`Active tables for waiter ${waiterId}: ${Object.keys(tablesMap).length} tables found`);
 
     res.json({ data: Object.values(tablesMap) });
   } catch (error) {
