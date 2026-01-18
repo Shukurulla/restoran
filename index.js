@@ -158,8 +158,30 @@ async function assignWaiterToOrder(restaurantId, tableId) {
 }
 
 // Socket.io
-io.on("connection", (socket) => {
+io.on("connection", async (socket) => {
   console.log(`User connected: ${socket.id}`);
+
+  // Query parametrlardan staffId va restaurantId olish (Flutter uchun)
+  const queryStaffId = socket.handshake.query?.staffId;
+  const queryRestaurantId = socket.handshake.query?.restaurantId;
+
+  if (queryStaffId && queryRestaurantId) {
+    console.log(`Auto-joining waiter from query: staffId=${queryStaffId}, restaurantId=${queryRestaurantId}`);
+    try {
+      const waiter = await Staff.findByIdAndUpdate(
+        queryStaffId,
+        { socketId: socket.id, isOnline: true },
+        { new: true }
+      );
+      if (waiter) {
+        socket.join(`waiter_${queryStaffId}`);
+        socket.join(`restaurant_${queryRestaurantId}`);
+        console.log(`Waiter ${queryStaffId} auto-joined rooms from query params`);
+      }
+    } catch (error) {
+      console.error("Auto-join waiter error:", error);
+    }
+  }
 
   // Xodim ulanishi (waiter, cook, cashier)
   socket.on("staff_connect", async (data) => {
