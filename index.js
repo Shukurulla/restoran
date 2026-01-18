@@ -863,7 +863,14 @@ io.on("connection", async (socket) => {
       await Call.create({
         restaurantId,
         tableId,
+        tableNumber: table.tableNumber || 0,
         tableName: tableName || table.title,
+        agent: {
+          _id: waiter._id,
+          firstName: waiter.firstName,
+          lastName: waiter.lastName,
+          phone: waiter.phone,
+        },
         waiterId: waiter._id,
         waiterName: `${waiter.firstName} ${waiter.lastName}`,
         type: "bell_call",
