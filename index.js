@@ -265,6 +265,29 @@ io.on("connection", async (socket) => {
         socket.join(`waiter_${waiterId}`);
         socket.join(`restaurant_${waiter.restaurantId}`);
         console.log(`Waiter ${waiterId} joined rooms: waiter_${waiterId}, restaurant_${waiter.restaurantId}`);
+
+        // Waiter'ga ulanish tasdiqlangan deb xabar yuborish
+        socket.emit("connection_established", {
+          success: true,
+          waiterId: waiterId,
+          waiterName: `${waiter.firstName} ${waiter.lastName}`,
+          restaurantId: waiter.restaurantId,
+          message: "Serverga muvaffaqiyatli ulandi!",
+        });
+        console.log(`Connection established event sent to waiter ${waiterId}`);
+
+        // Push notification yuborish
+        if (waiter.fcmToken) {
+          sendPushNotification(
+            waiter.fcmToken,
+            "Serverga ulandi!",
+            `${waiter.firstName}, siz serverga muvaffaqiyatli ulandingiz!`,
+            { type: "connection_established", waiterId: waiterId }
+          );
+          console.log(`Push notification sent to waiter ${waiterId}`);
+        } else {
+          console.log(`Waiter ${waiterId} has no FCM token`);
+        }
       }
     } catch (error) {
       console.error("Waiter connect error:", error);
