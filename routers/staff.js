@@ -2,6 +2,7 @@ const express = require("express");
 const router = express.Router();
 const Staff = require("../models/staff");
 const Restaurant = require("../models/restaurant");
+const WaiterNotification = require("../models/waiter-notification");
 const { generateToken, authenticateStaff } = require("../middleware/auth");
 
 // Xodim Login (waiter, cook, cashier)
@@ -174,6 +175,125 @@ router.get("/staff/colleagues", authenticateStaff, async (req, res) => {
     res.json({ staff });
   } catch (error) {
     console.error("Get colleagues error:", error);
+    res.status(500).json({ error: "Server xatosi" });
+  }
+});
+
+// ============ WAITER NOTIFICATIONS ============
+
+// Waiter notificationlarini olish
+router.get("/staff/:staffId/notifications", async (req, res) => {
+  try {
+    const { staffId } = req.params;
+    const { status } = req.query; // 'pending', 'completed', 'all'
+
+    let filter = { waiterId: staffId };
+
+    if (status === "pending") {
+      filter.isCompleted = false;
+    } else if (status === "completed") {
+      filter.isCompleted = true;
+    }
+
+    const notifications = await WaiterNotification.find(filter)
+      .sort({ createdAt: -1 })
+      .limit(50);
+
+    res.json({
+      success: true,
+      notifications
+    });
+  } catch (error) {
+    console.error("Get notifications error:", error);
+    res.status(500).json({ error: "Server xatosi" });
+  }
+});
+
+// Notificationni o'qilgan deb belgilash
+router.patch("/staff/notifications/:notificationId/read", async (req, res) => {
+  try {
+    const { notificationId } = req.params;
+
+    const notification = await WaiterNotification.findByIdAndUpdate(
+      notificationId,
+      { isRead: true },
+      { new: true }
+    );
+
+    if (!notification) {
+      return res.status(404).json({ error: "Notification topilmadi" });
+    }
+
+    res.json({ success: true, notification });
+  } catch (error) {
+    console.error("Mark notification read error:", error);
+    res.status(500).json({ error: "Server xatosi" });
+  }
+});
+
+// Notificationni bajarilgan deb belgilash
+router.patch("/staff/notifications/:notificationId/complete", async (req, res) => {
+  try {
+    const { notificationId } = req.params;
+
+    const notification = await WaiterNotification.findByIdAndUpdate(
+      notificationId,
+      {
+        isCompleted: true,
+        completedAt: new Date(),
+        isRead: true
+      },
+      { new: true }
+    );
+
+    if (!notification) {
+      return res.status(404).json({ error: "Notification topilmadi" });
+    }
+
+    res.json({ success: true, notification });
+  } catch (error) {
+    console.error("Complete notification error:", error);
+    res.status(500).json({ error: "Server xatosi" });
+  }
+});
+
+// Order ID bo'yicha notificationlarni completed qilish
+router.patch("/staff/notifications/order/:orderId/complete", async (req, res) => {
+  try {
+    const { orderId } = req.params;
+
+    const result = await WaiterNotification.updateMany(
+      { orderId: orderId, isCompleted: false },
+      {
+        isCompleted: true,
+        completedAt: new Date(),
+        isRead: true
+      }
+    );
+
+    res.json({
+      success: true,
+      modifiedCount: result.modifiedCount
+    });
+  } catch (error) {
+    console.error("Complete order notifications error:", error);
+    res.status(500).json({ error: "Server xatosi" });
+  }
+});
+
+// Pending notifications count
+router.get("/staff/:staffId/notifications/count", async (req, res) => {
+  try {
+    const { staffId } = req.params;
+
+    const count = await WaiterNotification.countDocuments({
+      waiterId: staffId,
+      isCompleted: false,
+    });
+
+    res.json({ success: true, count });
+  } catch (error) {
+    console.error("Get notifications count error:", error);
     res.status(500).json({ error: "Server xatosi" });
   }
 });

@@ -16,6 +16,7 @@ const Restaurant = require("./models/restaurant");
 const Table = require("./models/table");
 const QRSession = require("./models/qr-session");
 const Food = require("./models/foods");
+const WaiterNotification = require("./models/waiter-notification");
 
 // Firebase Service
 const { initializeFirebase, sendPushNotification } = require("./services/firebase.service");
@@ -612,7 +613,7 @@ io.on("connection", async (socket) => {
 
       // Waiter'ga ham xabar yuborish - faqat shu paytda tayyor bo'lgan 1 ta taom
       if (order.waiterId && item.isReady) {
-        io.to(`waiter_${order.waiterId}`).emit("order_ready_notification", {
+        const notificationData = {
           orderId: order._id.toString(),
           tableName: order.tableName,
           tableNumber: order.tableNumber || 0,
@@ -623,8 +624,27 @@ io.on("connection", async (socket) => {
             isReady: true
           }],
           allReady: allReady,
-        });
+        };
+
+        // Socket orqali yuborish
+        io.to(`waiter_${order.waiterId}`).emit("order_ready_notification", notificationData);
         console.log(`Item ready notification sent to waiter_${order.waiterId}: ${item.foodName}`);
+
+        // Bazaga saqlash
+        try {
+          await WaiterNotification.create({
+            waiterId: order.waiterId,
+            restaurantId: order.restaurantId,
+            orderId: order._id,
+            type: "food_ready",
+            tableName: order.tableName,
+            tableNumber: order.tableNumber || 0,
+            message: notificationData.message,
+            items: notificationData.items,
+          });
+        } catch (saveErr) {
+          console.error("WaiterNotification save error:", saveErr);
+        }
       }
     } catch (error) {
       console.error("Item ready error:", error);
