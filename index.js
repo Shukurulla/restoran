@@ -1074,6 +1074,7 @@ io.on("connection", async (socket) => {
           const kitchenOrder = await KitchenOrder.findOne({ orderId: order._id });
           return {
             ...order.toObject(),
+            kitchenOrderId: kitchenOrder ? kitchenOrder._id : null,
             kitchenStatus: kitchenOrder ? kitchenOrder.status : "pending",
             items: kitchenOrder ? kitchenOrder.items : [],
           };
