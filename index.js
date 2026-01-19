@@ -1295,14 +1295,9 @@ io.on("connection", async (socket) => {
         restaurantId: kitchenOrder.restaurantId,
       };
 
-      // FAQAT kerakli room'larga yuborish (global emit olib tashlandi - duplikatni oldini olish)
-      // Kitchen (cook-panel) ga - faqat restaurantId bo'yicha room'ga
+      // Kitchen (cook-panel) ga yuborish
       io.to(`kitchen_${kitchenOrder.restaurantId}`).emit("order_item_cancelled", cancelEventData);
-
-      // Legacy kitchen room (agar faqat "kitchen" room'ga qo'shilgan bo'lsa)
-      // Bu room'ga qo'shilganlar kitchen_${restaurantId} ga ham qo'shilgan bo'lsa, duplikat bo'ladi
-      // Shuning uchun olib tashlaymiz
-      // io.to("kitchen").emit("order_item_cancelled", cancelEventData);
+      io.to("kitchen").emit("order_item_cancelled", cancelEventData); // Legacy support
 
       // My-orders (mijoz) uchun - faqat tegishli sessiyaga
       if (sessionId) {
