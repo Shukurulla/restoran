@@ -296,9 +296,17 @@ io.on("connection", async (socket) => {
         { new: true }
       );
       if (waiter) {
+        // Har doim shaxsiy room'ga qo'shish (shaxsiy xabarlar uchun)
         socket.join(`waiter_${waiterId}`);
-        socket.join(`restaurant_${waiter.restaurantId}`);
-        console.log(`Waiter ${waiterId} joined rooms: waiter_${waiterId}, restaurant_${waiter.restaurantId}`);
+
+        // MUHIM: Faqat isWorking=true bo'lgan waiter'lar restaurant room'iga qo'shiladi
+        // Bu real-time broadcast xabarlarni olish uchun kerak
+        if (waiter.isWorking) {
+          socket.join(`restaurant_${waiter.restaurantId}`);
+          console.log(`Waiter ${waiterId} (isWorking=true) joined rooms: waiter_${waiterId}, restaurant_${waiter.restaurantId}`);
+        } else {
+          console.log(`Waiter ${waiterId} (isWorking=false) joined only personal room: waiter_${waiterId}`);
+        }
 
         // Waiter'ga ulanish tasdiqlangan deb xabar yuborish
         socket.emit("connection_established", {
@@ -345,9 +353,22 @@ io.on("connection", async (socket) => {
   });
 
   // Restoranga xos room'ga qo'shilish
-  socket.on("join_restaurant", (data) => {
+  // ESLATMA: Waiter'lar uchun bu isWorking tekshiruvidan o'tmaydi
+  // Waiter'lar faqat waiter_connect orqali isWorking tekshiruvi bilan room'ga qo'shiladi
+  socket.on("join_restaurant", async (data) => {
     const restaurantId = typeof data === 'object' ? data.restaurantId : data;
+    const staffId = typeof data === 'object' ? data.staffId : null;
+
     if (restaurantId) {
+      // Agar staffId berilgan bo'lsa, isWorking tekshirish
+      if (staffId) {
+        const staff = await Staff.findById(staffId);
+        if (staff && staff.role === 'waiter' && !staff.isWorking) {
+          console.log(`Waiter ${staffId} (isWorking=false) blocked from joining restaurant_${restaurantId}`);
+          return;
+        }
+      }
+
       socket.join(`restaurant_${restaurantId}`);
       socket.join(`kitchen_${restaurantId}`);
       console.log(`Socket joined restaurant_${restaurantId} and kitchen_${restaurantId}`);
@@ -497,7 +518,9 @@ io.on("connection", async (socket) => {
           if (kitchenOrder.waiterId) {
             const waiter = await Staff.findById(kitchenOrder.waiterId);
             if (waiter) {
-              console.log(`Sending new_order_items to waiter ${waiter._id}`);
+              console.log(`Sending new_order_items to waiter ${waiter._id} (${waiter.firstName})`);
+              console.log(`Waiter FCM token exists: ${!!waiter.fcmToken}`);
+
               io.to(`waiter_${waiter._id}`).emit("new_order_items", {
                 order: kitchenOrder,
                 tableName,
@@ -515,6 +538,8 @@ io.on("connection", async (socket) => {
                   `${tableName} ga yangi buyurtma qo'shildi`,
                   { type: "new_order_items", orderId: kitchenOrder._id.toString() }
                 );
+              } else {
+                console.log(`Waiter ${waiter._id} (${waiter.firstName}) has no FCM token for new_order_items`);
               }
             }
           }
@@ -557,7 +582,9 @@ io.on("connection", async (socket) => {
 
         // Ofitsiyantga xabar
         if (assignedWaiter) {
-          console.log(`Sending new_table_assigned to waiter ${assignedWaiter._id}`);
+          console.log(`Sending new_table_assigned to waiter ${assignedWaiter._id} (${assignedWaiter.firstName})`);
+          console.log(`Waiter FCM token exists: ${!!assignedWaiter.fcmToken}`);
+
           io.to(`waiter_${assignedWaiter._id}`).emit("new_table_assigned", {
             order: kitchenOrder,
             tableName,
@@ -566,16 +593,24 @@ io.on("connection", async (socket) => {
           });
 
           // Push notification yuborish (app yopiq bo'lsa ham)
-          if (assignedWaiter.fcmToken) {
+          // Agar waiter fallback bo'lsa, FCM token'ni bazadan qayta olish
+          let fcmToken = assignedWaiter.fcmToken;
+          if (!fcmToken) {
+            const freshWaiter = await Staff.findById(assignedWaiter._id).select('fcmToken');
+            fcmToken = freshWaiter?.fcmToken;
+            console.log(`Fetched fresh FCM token for waiter ${assignedWaiter._id}: ${!!fcmToken}`);
+          }
+
+          if (fcmToken) {
             console.log(`Sending push notification for new table to waiter ${assignedWaiter._id}`);
             sendPushNotification(
-              assignedWaiter.fcmToken,
+              fcmToken,
               "Yangi buyurtma!",
               `${tableName} dan yangi buyurtma keldi`,
               { type: "new_table_assigned", orderId: kitchenOrder._id.toString() }
             );
           } else {
-            console.log(`Waiter ${assignedWaiter._id} has no FCM token for new_table_assigned`);
+            console.log(`Waiter ${assignedWaiter._id} (${assignedWaiter.firstName}) has no FCM token for new_table_assigned`);
           }
         } else {
           console.log(`No waiter assigned for table ${tableName}`);
