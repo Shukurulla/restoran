@@ -1015,13 +1015,23 @@ io.on("connection", async (socket) => {
         return;
       }
 
+      // O'chirilayotgan item narxini hisoblash
+      const cancelledItemPrice = (item.price || 0) * (item.quantity || 1);
+
       // Itemni o'chirish
       kitchenOrder.items.splice(itemIndex, 1);
+
+      // TotalPrice ni yangilash
+      const newTotalPrice = kitchenOrder.items.reduce((sum, i) => sum + (i.price || 0) * (i.quantity || 1), 0);
+      kitchenOrder.totalPrice = newTotalPrice;
 
       // Agar barcha itemlar o'chirilgan bo'lsa - orderni cancelled qilish
       if (kitchenOrder.items.length === 0) {
         kitchenOrder.status = "served"; // yoki cancelled
-        await Order.findByIdAndUpdate(kitchenOrder.orderId, { status: "cancelled" });
+        await Order.findByIdAndUpdate(kitchenOrder.orderId, { status: "cancelled", totalPrice: 0 });
+      } else {
+        // Order totalPrice ni ham yangilash
+        await Order.findByIdAndUpdate(kitchenOrder.orderId, { totalPrice: newTotalPrice });
       }
 
       await kitchenOrder.save();
@@ -1037,7 +1047,27 @@ io.on("connection", async (socket) => {
       io.to(`kitchen_${kitchenOrder.restaurantId}`).emit("kitchen_orders_updated", kitchenOrders);
       io.to("kitchen").emit("kitchen_orders_updated", kitchenOrders);
 
-      socket.emit("cancel_order_response", { success: true });
+      // Waiter (ofitsiant) tomonga ham xabar
+      io.to(`waiter_${kitchenOrder.restaurantId}`).emit("kitchen_orders_updated", kitchenOrders);
+
+      // Kassir tomonga xabar
+      io.to(`cashier_${kitchenOrder.restaurantId}`).emit("kitchen_orders_updated", kitchenOrders);
+      io.to(`cashier_${kitchenOrder.restaurantId}`).emit("order_updated", {
+        orderId: kitchenOrder.orderId,
+        kitchenOrderId: kitchenOrder._id,
+        totalPrice: newTotalPrice,
+        items: kitchenOrder.items,
+      });
+
+      // Client (my-orders) ga yangilangan ma'lumot yuborish
+      io.emit("order_item_cancelled", {
+        kitchenOrderId: kitchenOrder._id,
+        orderId: kitchenOrder.orderId,
+        newTotalPrice,
+        itemsCount: kitchenOrder.items.length,
+      });
+
+      socket.emit("cancel_order_response", { success: true, newTotalPrice });
     } catch (error) {
       console.error("Cancel order error:", error);
       socket.emit("cancel_order_response", { success: false, error: error.message });
