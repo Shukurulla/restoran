@@ -340,7 +340,7 @@ io.on("connection", async (socket) => {
     // data object yoki string bo'lishi mumkin
     const restaurantId = typeof data === 'object' ? data.restaurantId : data;
     socket.join(`kitchen_${restaurantId || "default"}`);
-    socket.join("kitchen"); // Legacy support
+    // Legacy "kitchen" room olib tashlandi - duplikat event oldini olish uchun
     console.log(`Cook connected to kitchen_${restaurantId}`);
   });
 
@@ -1287,6 +1287,7 @@ io.on("connection", async (socket) => {
       const cancelEventData = {
         kitchenOrderId: kitchenOrder._id,
         orderId: kitchenOrder.orderId,
+        itemIndex, // Deduplication uchun
         newTotalPrice,
         itemsCount: kitchenOrder.items.length,
         cancelledItem,
@@ -1294,12 +1295,19 @@ io.on("connection", async (socket) => {
         restaurantId: kitchenOrder.restaurantId,
       };
 
-      // Barcha clientlarga
-      io.emit("order_item_cancelled", cancelEventData);
-
-      // Kitchen (cook-panel) ga alohida
+      // FAQAT kerakli room'larga yuborish (global emit olib tashlandi - duplikatni oldini olish)
+      // Kitchen (cook-panel) ga - faqat restaurantId bo'yicha room'ga
       io.to(`kitchen_${kitchenOrder.restaurantId}`).emit("order_item_cancelled", cancelEventData);
-      io.to("kitchen").emit("order_item_cancelled", cancelEventData);
+
+      // Legacy kitchen room (agar faqat "kitchen" room'ga qo'shilgan bo'lsa)
+      // Bu room'ga qo'shilganlar kitchen_${restaurantId} ga ham qo'shilgan bo'lsa, duplikat bo'ladi
+      // Shuning uchun olib tashlaymiz
+      // io.to("kitchen").emit("order_item_cancelled", cancelEventData);
+
+      // My-orders (mijoz) uchun - faqat tegishli sessiyaga
+      if (sessionId) {
+        io.to(`session_${sessionId}`).emit("order_item_cancelled", cancelEventData);
+      }
 
       socket.emit("cancel_order_response", { success: true, newTotalPrice });
     } catch (error) {
