@@ -648,12 +648,14 @@ io.on("connection", async (socket) => {
         order: kitchenOrder,
         allOrders: kitchenOrders,
         isNewOrder,
+        newItems: newItems, // Faqat yangi qo'shilgan itemlar - print uchun
       });
 
       // Legacy support
       io.to("kitchen").emit("new_kitchen_order", {
         order: kitchenOrder,
         allOrders: kitchenOrders,
+        newItems: newItems,
       });
 
       // Kassaga xabar
