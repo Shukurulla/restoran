@@ -340,8 +340,8 @@ io.on("connection", async (socket) => {
     // data object yoki string bo'lishi mumkin
     const restaurantId = typeof data === 'object' ? data.restaurantId : data;
     socket.join(`kitchen_${restaurantId || "default"}`);
-    // Legacy "kitchen" room olib tashlandi - duplikat event oldini olish uchun
-    console.log(`Cook connected to kitchen_${restaurantId}`);
+    socket.join("kitchen"); // Legacy support - backend hali ham bu roomga emit qiladi
+    console.log(`Cook connected to kitchen_${restaurantId} and kitchen`);
   });
 
   socket.on("cashier_connect", async (data) => {
