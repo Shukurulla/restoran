@@ -672,7 +672,29 @@ io.on("connection", async (socket) => {
 
       // Waiter'ga ham xabar yuborish - faqat shu paytda tayyor bo'lgan 1 ta taom
       if (order.waiterId && item.isReady) {
+        // Avval bazaga saqlash - notificationId olish uchun
+        let savedNotification = null;
+        try {
+          savedNotification = await WaiterNotification.create({
+            waiterId: order.waiterId,
+            restaurantId: order.restaurantId,
+            orderId: order._id,
+            type: "food_ready",
+            tableName: order.tableName,
+            tableNumber: order.tableNumber || 0,
+            message: `${order.tableName}: ${item.foodName} tayyor!`,
+            items: [{
+              foodName: item.foodName,
+              quantity: item.quantity,
+              isReady: true
+            }],
+          });
+        } catch (saveErr) {
+          console.error("WaiterNotification save error:", saveErr);
+        }
+
         const notificationData = {
+          notificationId: savedNotification ? savedNotification._id.toString() : null,
           orderId: order._id.toString(),
           tableName: order.tableName,
           tableNumber: order.tableNumber || 0,
@@ -687,23 +709,7 @@ io.on("connection", async (socket) => {
 
         // Socket orqali yuborish
         io.to(`waiter_${order.waiterId}`).emit("order_ready_notification", notificationData);
-        console.log(`Item ready notification sent to waiter_${order.waiterId}: ${item.foodName}`);
-
-        // Bazaga saqlash
-        try {
-          await WaiterNotification.create({
-            waiterId: order.waiterId,
-            restaurantId: order.restaurantId,
-            orderId: order._id,
-            type: "food_ready",
-            tableName: order.tableName,
-            tableNumber: order.tableNumber || 0,
-            message: notificationData.message,
-            items: notificationData.items,
-          });
-        } catch (saveErr) {
-          console.error("WaiterNotification save error:", saveErr);
-        }
+        console.log(`Item ready notification sent to waiter_${order.waiterId}: ${item.foodName}, notificationId: ${notificationData.notificationId}`);
       }
     } catch (error) {
       console.error("Item ready error:", error);
@@ -937,8 +943,27 @@ io.on("connection", async (socket) => {
       table.status = "occupied";
       await table.save();
 
-      // Waiter'ga notification yuborish
+      // WaiterNotification ga avval saqlash (notificationId olish uchun)
+      let savedNotification = null;
+      try {
+        savedNotification = await WaiterNotification.create({
+          waiterId: waiter._id,
+          restaurantId,
+          orderId: null,
+          type: "waiter_call",
+          tableName: tableName || table.title,
+          tableNumber: table.tableNumber || 0,
+          message: `${tableName || table.title} dan chaqiruv!`,
+          items: [],
+        });
+        console.log(`WaiterNotification saved for waiter_call: ${tableName || table.title}, id: ${savedNotification._id}`);
+      } catch (saveErr) {
+        console.error("WaiterNotification save error (waiter_call):", saveErr);
+      }
+
+      // Waiter'ga notification yuborish - notificationId bilan
       io.to(`waiter_${waiter._id}`).emit("waiter_called", {
+        notificationId: savedNotification ? savedNotification._id.toString() : null,
         tableId,
         tableName: tableName || table.title,
         tableNumber: table.tableNumber,
@@ -971,23 +996,6 @@ io.on("connection", async (socket) => {
         waiterName: `${waiter.firstName} ${waiter.lastName}`,
         type: "bell_call",
       });
-
-      // WaiterNotification ga ham saqlash (vazifalar sahifasi uchun)
-      try {
-        await WaiterNotification.create({
-          waiterId: waiter._id,
-          restaurantId,
-          orderId: null,
-          type: "waiter_call",
-          tableName: tableName || table.title,
-          tableNumber: table.tableNumber || 0,
-          message: `${tableName || table.title} dan chaqiruv!`,
-          items: [],
-        });
-        console.log(`WaiterNotification saved for waiter_call: ${tableName || table.title}`);
-      } catch (saveErr) {
-        console.error("WaiterNotification save error (waiter_call):", saveErr);
-      }
 
       socket.emit("call_waiter_response", {
         success: true,
