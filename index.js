@@ -585,9 +585,13 @@ io.on("connection", async (socket) => {
       // Mijozga javob
       socket.emit("get_message", { msg: "success", orderId: order._id });
 
-      // BARCHA WAITER'LARGA XABAR YUBORISH (restaurant_${restaurantId} room orqali)
-      console.log(`Broadcasting new_order to restaurant_${restaurantId}`);
-      io.to(`restaurant_${restaurantId}`).emit("new_order", {
+      // FAQAT BIRIKTIRILGAN WAITER'GA XABAR YUBORISH (boshqa waiterlarga EMAS!)
+      // Agar yangi order bo'lsa - assignedWaiter'ga yuborilgan
+      // Agar mavjud orderga qo'shilgan bo'lsa - kitchenOrder.waiterId ga yuborilgan
+      // Shuning uchun bu yerda faqat admin/kitchen panellar uchun broadcast qilamiz
+
+      // Admin panel uchun (real-time updates)
+      io.to(`admin_${restaurantId}`).emit("new_order", {
         order: kitchenOrder,
         tableName,
         tableNumber,
