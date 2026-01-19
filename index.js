@@ -728,8 +728,8 @@ io.on("connection", async (socket) => {
       io.to("cashier").emit("new_kitchen_order", { order: kitchenOrder });
 
       // Kassirga yangi buyurtma xabari (order formatida)
-      io.to(`cashier_${restaurantId}`).emit("new_order_for_cashier", savedOrder);
-      io.to("cashier").emit("new_order_for_cashier", savedOrder);
+      io.to(`cashier_${restaurantId}`).emit("new_order_for_cashier", order);
+      io.to("cashier").emit("new_order_for_cashier", order);
 
       // Barcha buyurtmalarni broadcast
       const orders = await Order.find({ restaurantId });
