@@ -344,12 +344,75 @@ io.on("connection", async (socket) => {
     console.log(`Cook connected to kitchen_${restaurantId}`);
   });
 
-  socket.on("cashier_connect", (data) => {
+  socket.on("cashier_connect", async (data) => {
     // data object yoki string bo'lishi mumkin
     const restaurantId = typeof data === 'object' ? data.restaurantId : data;
     socket.join(`cashier_${restaurantId || "default"}`);
     socket.join("cashier"); // Legacy support
     console.log(`Cashier connected to cashier_${restaurantId}`);
+
+    // Kassirga buyurtmalarni yuborish
+    if (restaurantId) {
+      try {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        // Bugungi to'lanmagan buyurtmalar
+        const activeOrders = await Order.find({
+          restaurantId,
+          isPaid: false,
+          createdAt: { $gte: today }
+        }).sort({ createdAt: -1 });
+
+        // Bugungi to'langan buyurtmalar
+        const paidOrders = await Order.find({
+          restaurantId,
+          isPaid: true,
+          createdAt: { $gte: today }
+        }).sort({ paidAt: -1 });
+
+        socket.emit("cashier_orders", {
+          activeOrders,
+          paidOrders
+        });
+        console.log(`Sent ${activeOrders.length} active and ${paidOrders.length} paid orders to cashier`);
+      } catch (error) {
+        console.error("Cashier orders error:", error);
+      }
+    }
+  });
+
+  // Kassir buyurtmalarni so'rashi
+  socket.on("get_cashier_orders", async (data) => {
+    const restaurantId = typeof data === 'object' ? data.restaurantId : data;
+    if (!restaurantId) return;
+
+    try {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      // Bugungi to'lanmagan buyurtmalar
+      const activeOrders = await Order.find({
+        restaurantId,
+        isPaid: false,
+        createdAt: { $gte: today }
+      }).sort({ createdAt: -1 });
+
+      // Bugungi to'langan buyurtmalar
+      const paidOrders = await Order.find({
+        restaurantId,
+        isPaid: true,
+        createdAt: { $gte: today }
+      }).sort({ paidAt: -1 });
+
+      socket.emit("cashier_orders", {
+        activeOrders,
+        paidOrders
+      });
+      console.log(`Cashier requested orders: ${activeOrders.length} active, ${paidOrders.length} paid`);
+    } catch (error) {
+      console.error("Get cashier orders error:", error);
+    }
   });
 
   // Restoranga xos room'ga qo'shilish
@@ -664,6 +727,10 @@ io.on("connection", async (socket) => {
       });
       io.to("cashier").emit("new_kitchen_order", { order: kitchenOrder });
 
+      // Kassirga yangi buyurtma xabari (order formatida)
+      io.to(`cashier_${restaurantId}`).emit("new_order_for_cashier", savedOrder);
+      io.to("cashier").emit("new_order_for_cashier", savedOrder);
+
       // Barcha buyurtmalarni broadcast
       const orders = await Order.find({ restaurantId });
       socket.broadcast.emit("get_order", orders);
@@ -965,6 +1032,59 @@ io.on("connection", async (socket) => {
       io.to("kitchen").emit("kitchen_orders_updated", kitchenOrders);
     } catch (error) {
       console.error("Mark paid error:", error);
+    }
+  });
+
+  // Kassir to'lovni tasdiqlash (cashier-electron uchun)
+  socket.on("confirm_payment", async (data) => {
+    try {
+      const { orderId, paymentType, restaurantId, cashierId } = data;
+      console.log("Confirm payment:", data);
+
+      // Order ni topish va yangilash
+      const order = await Order.findById(orderId);
+      if (!order) {
+        socket.emit("payment_confirmed", { success: false, error: "Buyurtma topilmadi" });
+        return;
+      }
+
+      order.isPaid = true;
+      order.paidAt = new Date();
+      order.paymentType = paymentType || "cash";
+      order.cashierId = cashierId;
+      await order.save();
+
+      // Stolni bo'shatish
+      if (order.tableId) {
+        await Table.findByIdAndUpdate(order.tableId, {
+          status: "free",
+          assignedWaiterId: null,
+        });
+      }
+
+      // KitchenOrder ni ham yangilash
+      await KitchenOrder.updateMany(
+        { orderId: order._id },
+        { isPaid: true, paidAt: new Date(), paymentMethod: paymentType }
+      );
+
+      // Kassirga tasdiqlash
+      socket.emit("payment_confirmed", { success: true, orderId });
+
+      // Boshqa kassirlar uchun order_paid event
+      io.to(`cashier_${restaurantId}`).emit("order_paid", {
+        orderId: order._id,
+        paymentType: paymentType
+      });
+      io.to("cashier").emit("order_paid", {
+        orderId: order._id,
+        paymentType: paymentType
+      });
+
+      console.log(`Payment confirmed for order ${orderId}`);
+    } catch (error) {
+      console.error("Confirm payment error:", error);
+      socket.emit("payment_confirmed", { success: false, error: error.message });
     }
   });
 
