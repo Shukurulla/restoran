@@ -358,19 +358,62 @@ io.on("connection", async (socket) => {
       let kitchenOrder;
       let isNewOrder = false;
 
-      // Yangi itemlarni tayyorlash
+      // Yangi itemlarni tayyorlash - allOrders yoki selectFoods dan
+      // allOrders - har bir bosishda alohida element (quantity yo'q)
+      // selectFoods - unique elementlar (quantity bor bo'lishi kerak)
       const newItems = [];
-      if (selectFoods && Array.isArray(selectFoods)) {
-        selectFoods.forEach((food) => {
-          newItems.push({
-            foodId: food._id || food.id,
-            foodName: food.foodName || food.name,
-            quantity: food.quantity || food.count || 1,
-            price: food.price || 0,
-            isReady: false,
-          });
+      const sourceItems = selectFoods && Array.isArray(selectFoods) ? selectFoods : [];
+
+      // Agar selectFoods'da quantity to'g'ri bo'lmasa, allOrders'dan hisoblash
+      const itemsMap = new Map();
+
+      // Avval selectFoods'ni tekshirish
+      let useAllOrders = false;
+      if (sourceItems.length > 0) {
+        const totalQtyFromSelectFoods = sourceItems.reduce((sum, f) => sum + (f.quantity || f.count || 1), 0);
+        const allOrdersLength = (data.allOrders || []).length;
+        // Agar quantity noto'g'ri bo'lsa (masalan, 3 ta qo'shilgan lekin quantity=1)
+        if (totalQtyFromSelectFoods < allOrdersLength && allOrdersLength > 0) {
+          useAllOrders = true;
+        }
+      }
+
+      if (useAllOrders && data.allOrders && Array.isArray(data.allOrders)) {
+        // allOrders'dan guruhlash
+        data.allOrders.forEach((food) => {
+          const foodId = food._id || food.id;
+          if (itemsMap.has(foodId)) {
+            itemsMap.get(foodId).quantity += 1;
+          } else {
+            itemsMap.set(foodId, {
+              foodId: foodId,
+              foodName: food.foodName || food.name,
+              quantity: 1,
+              price: food.price || 0,
+              isReady: false,
+            });
+          }
+        });
+      } else {
+        // selectFoods'dan olish (quantity bilan)
+        sourceItems.forEach((food) => {
+          const foodId = food._id || food.id;
+          if (itemsMap.has(foodId)) {
+            itemsMap.get(foodId).quantity += (food.quantity || food.count || 1);
+          } else {
+            itemsMap.set(foodId, {
+              foodId: foodId,
+              foodName: food.foodName || food.name,
+              quantity: food.quantity || food.count || 1,
+              price: food.price || 0,
+              isReady: false,
+            });
+          }
         });
       }
+
+      // Map'dan array'ga o'tkazish
+      itemsMap.forEach((item) => newItems.push(item));
 
       if (existingOrder) {
         // Mavjud orderga qo'shish
