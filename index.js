@@ -295,14 +295,30 @@ io.on("connection", async (socket) => {
     }
   });
 
-  socket.on("cook_connect", (restaurantId) => {
+  socket.on("cook_connect", (data) => {
+    // data object yoki string bo'lishi mumkin
+    const restaurantId = typeof data === 'object' ? data.restaurantId : data;
     socket.join(`kitchen_${restaurantId || "default"}`);
     socket.join("kitchen"); // Legacy support
+    console.log(`Cook connected to kitchen_${restaurantId}`);
   });
 
-  socket.on("cashier_connect", (restaurantId) => {
+  socket.on("cashier_connect", (data) => {
+    // data object yoki string bo'lishi mumkin
+    const restaurantId = typeof data === 'object' ? data.restaurantId : data;
     socket.join(`cashier_${restaurantId || "default"}`);
     socket.join("cashier"); // Legacy support
+    console.log(`Cashier connected to cashier_${restaurantId}`);
+  });
+
+  // Restoranga xos room'ga qo'shilish
+  socket.on("join_restaurant", (data) => {
+    const restaurantId = typeof data === 'object' ? data.restaurantId : data;
+    if (restaurantId) {
+      socket.join(`restaurant_${restaurantId}`);
+      socket.join(`kitchen_${restaurantId}`);
+      console.log(`Socket joined restaurant_${restaurantId} and kitchen_${restaurantId}`);
+    }
   });
 
   // Yangi buyurtma (mijozdan) - ORDER MERGING bilan
@@ -1015,7 +1031,13 @@ io.on("connection", async (socket) => {
         return;
       }
 
-      // O'chirilayotgan item narxini hisoblash
+      // O'chirilayotgan item ma'lumotlarini saqlash (notification uchun)
+      const cancelledItem = {
+        foodName: item.foodName,
+        quantity: item.quantity || 1,
+        price: item.price || 0,
+        foodId: item.foodId,
+      };
       const cancelledItemPrice = (item.price || 0) * (item.quantity || 1);
 
       // Itemni o'chirish
@@ -1059,13 +1081,23 @@ io.on("connection", async (socket) => {
         items: kitchenOrder.items,
       });
 
-      // Client (my-orders) ga yangilangan ma'lumot yuborish
-      io.emit("order_item_cancelled", {
+      // Client (my-orders) va Kitchen (cook-panel) ga yangilangan ma'lumot yuborish
+      const cancelEventData = {
         kitchenOrderId: kitchenOrder._id,
         orderId: kitchenOrder.orderId,
         newTotalPrice,
         itemsCount: kitchenOrder.items.length,
-      });
+        cancelledItem,
+        tableName: kitchenOrder.tableName,
+        restaurantId: kitchenOrder.restaurantId,
+      };
+
+      // Barcha clientlarga
+      io.emit("order_item_cancelled", cancelEventData);
+
+      // Kitchen (cook-panel) ga alohida
+      io.to(`kitchen_${kitchenOrder.restaurantId}`).emit("order_item_cancelled", cancelEventData);
+      io.to("kitchen").emit("order_item_cancelled", cancelEventData);
 
       socket.emit("cancel_order_response", { success: true, newTotalPrice });
     } catch (error) {
