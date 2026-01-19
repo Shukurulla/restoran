@@ -80,44 +80,78 @@ mongoose
 
 mongoose.set("strictQuery", false);
 
-// Bo'sh ofitsiyantni topish va tayinlash (multi-tenant)
-// Stolga biriktirilgan waiter bo'lsa - uni qaytarish
-// Aks holda eng kam ish yukiga ega waiter tanlash
+// Stolga biriktirilgan waiterni topish yoki fallback
+// 1. Stolga biriktirilgan waiter bor va ishda - shunga berish
+// 2. Agar waiter ishda emas - boshqa ishdagi waiterga berish
+// 3. Random logika YO'Q - faqat stolga biriktirilgan waiter
 async function assignWaiterToTable(restaurantId, tableId) {
   try {
-    // Avval stolga biriktirilgan waiterni tekshirish
     const table = await Table.findById(tableId);
+
+    // 1. Stolga biriktirilgan waiter bormi tekshirish
     if (table && table.assignedWaiterId) {
       const assignedWaiter = await Staff.findById(table.assignedWaiterId);
+
+      // Waiter topildi va ishlayotgan statusda
       if (assignedWaiter && assignedWaiter.status === "working") {
-        return assignedWaiter;
+        // Waiter ishda (keldi) mi tekshirish
+        if (assignedWaiter.isWorking) {
+          console.log(`Order assigned to table's waiter: ${assignedWaiter.firstName} (working)`);
+          table.status = "occupied";
+          await table.save();
+          return assignedWaiter;
+        } else {
+          // Waiter ishda emas (ketdi) - boshqa ishdagi waiterni topish
+          console.log(`Table's waiter ${assignedWaiter.firstName} is not working, finding fallback...`);
+        }
       }
     }
 
-    // Shu restoranning faol va online ofitsiyantlarini olish
-    const availableWaiters = await Staff.find({
+    // 2. Fallback: ishdagi (isWorking=true) waiterlardan birini topish
+    const workingWaiters = await Staff.find({
       restaurantId,
       role: "waiter",
       status: "working",
-      isOnline: true,
+      isWorking: true, // Faqat ishga kelganlar
     });
 
-    if (availableWaiters.length === 0) {
-      // Agar online ofitsiyant yo'q bo'lsa, faol ofitsiyantlardan birini olish
+    if (workingWaiters.length === 0) {
+      console.log("No working waiters found, trying any active waiter...");
+
+      // 3. Hech kim ishda emas - status="working" waiterlardan tanlash (kamroq order yuki bo'yicha)
       const activeWaiters = await Staff.find({
         restaurantId,
         role: "waiter",
         status: "working",
       });
-      if (activeWaiters.length === 0) return null;
 
-      // Random tanlash
-      const randomIndex = Math.floor(Math.random() * activeWaiters.length);
-      const selectedWaiter = activeWaiters[randomIndex];
+      if (activeWaiters.length === 0) {
+        console.log("No active waiters found at all!");
+        return null;
+      }
 
-      // Stolga waiter biriktirish
+      // Eng kam ish yukiga ega waiterni tanlash
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      const waiterWorkloads = await Promise.all(
+        activeWaiters.map(async (waiter) => {
+          const activeOrders = await KitchenOrder.countDocuments({
+            restaurantId,
+            waiterId: waiter._id,
+            createdAt: { $gte: today },
+            status: { $in: ["pending", "preparing", "ready"] },
+          });
+          return { waiter, activeOrders };
+        })
+      );
+
+      waiterWorkloads.sort((a, b) => a.activeOrders - b.activeOrders);
+      const selectedWaiter = waiterWorkloads[0].waiter;
+
+      console.log(`Fallback (no one working): Selected ${selectedWaiter.firstName} with least orders`);
+
       if (table) {
-        table.assignedWaiterId = selectedWaiter._id;
         table.status = "occupied";
         await table.save();
       }
@@ -125,12 +159,12 @@ async function assignWaiterToTable(restaurantId, tableId) {
       return selectedWaiter;
     }
 
-    // Har bir ofitsiyantning bugungi tayinlangan stollar sonini hisoblash
+    // Ishdagi waiterlardan eng kam ish yukiga egasini tanlash
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
     const waiterWorkloads = await Promise.all(
-      availableWaiters.map(async (waiter) => {
+      workingWaiters.map(async (waiter) => {
         const activeOrders = await KitchenOrder.countDocuments({
           restaurantId,
           waiterId: waiter._id,
@@ -141,13 +175,12 @@ async function assignWaiterToTable(restaurantId, tableId) {
       })
     );
 
-    // Eng kam ish yukiga ega ofitsiyantni tanlash
     waiterWorkloads.sort((a, b) => a.activeOrders - b.activeOrders);
     const selectedWaiter = waiterWorkloads[0].waiter;
 
-    // Stolga waiter biriktirish
+    console.log(`Fallback (waiter not working): Selected ${selectedWaiter.firstName} with least orders`);
+
     if (table) {
-      table.assignedWaiterId = selectedWaiter._id;
       table.status = "occupied";
       await table.save();
     }

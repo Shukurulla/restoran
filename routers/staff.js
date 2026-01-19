@@ -3,6 +3,7 @@ const router = express.Router();
 const Staff = require("../models/staff");
 const Restaurant = require("../models/restaurant");
 const WaiterNotification = require("../models/waiter-notification");
+const Attendance = require("../models/attendance");
 const { generateToken, authenticateStaff } = require("../middleware/auth");
 
 // Xodim Login (waiter, cook, cashier)
@@ -85,6 +86,7 @@ router.get("/staff/profile", authenticateStaff, async (req, res) => {
         role: staff.role,
         status: staff.status,
         isOnline: staff.isOnline,
+        isWorking: staff.isWorking || false,
       },
       restaurant: {
         id: restaurant._id,
@@ -175,6 +177,139 @@ router.get("/staff/colleagues", authenticateStaff, async (req, res) => {
     res.json({ staff });
   } catch (error) {
     console.error("Get colleagues error:", error);
+    res.status(500).json({ error: "Server xatosi" });
+  }
+});
+
+// ============ ATTENDANCE (KELDI/KETDI) ============
+
+// Ishga keldi/ketdi toggle
+router.post("/staff/attendance", authenticateStaff, async (req, res) => {
+  try {
+    const staff = req.staff;
+    const { type } = req.body; // "keldi" yoki "ketdi"
+
+    if (!type || !["keldi", "ketdi"].includes(type)) {
+      return res.status(400).json({ error: "type 'keldi' yoki 'ketdi' bo'lishi kerak" });
+    }
+
+    // Attendance yozuvini yaratish
+    const attendance = await Attendance.create({
+      waiterId: staff._id,
+      restaurantId: req.restaurantId,
+      type,
+    });
+
+    // Staff isWorking ni yangilash
+    const isWorking = type === "keldi";
+    staff.isWorking = isWorking;
+    await staff.save();
+
+    res.json({
+      success: true,
+      attendance,
+      isWorking,
+    });
+  } catch (error) {
+    console.error("Attendance error:", error);
+    res.status(500).json({ error: "Server xatosi" });
+  }
+});
+
+// Attendance tarixini olish (bir kun yoki oraliq)
+router.get("/staff/attendance/history", authenticateStaff, async (req, res) => {
+  try {
+    const staff = req.staff;
+    const { startDate, endDate } = req.query;
+
+    let filter = { waiterId: staff._id };
+
+    if (startDate && endDate) {
+      const start = new Date(startDate);
+      start.setHours(0, 0, 0, 0);
+      const end = new Date(endDate);
+      end.setHours(23, 59, 59, 999);
+      filter.createdAt = { $gte: start, $lte: end };
+    } else if (startDate) {
+      const start = new Date(startDate);
+      start.setHours(0, 0, 0, 0);
+      const end = new Date(startDate);
+      end.setHours(23, 59, 59, 999);
+      filter.createdAt = { $gte: start, $lte: end };
+    }
+
+    const attendances = await Attendance.find(filter).sort({ createdAt: -1 });
+
+    res.json({
+      success: true,
+      attendances,
+    });
+  } catch (error) {
+    console.error("Get attendance history error:", error);
+    res.status(500).json({ error: "Server xatosi" });
+  }
+});
+
+// Bugungi attendance statusini olish
+router.get("/staff/attendance/today", authenticateStaff, async (req, res) => {
+  try {
+    const staff = req.staff;
+
+    // Bugungi kun
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    const todayAttendances = await Attendance.find({
+      waiterId: staff._id,
+      createdAt: { $gte: today, $lt: tomorrow },
+    }).sort({ createdAt: 1 });
+
+    res.json({
+      success: true,
+      isWorking: staff.isWorking || false,
+      todayAttendances,
+    });
+  } catch (error) {
+    console.error("Get today attendance error:", error);
+    res.status(500).json({ error: "Server xatosi" });
+  }
+});
+
+// Admin uchun: barcha waiterlarning bugungi attendance
+router.get("/staff/attendance/restaurant", authenticateStaff, async (req, res) => {
+  try {
+    const { restaurantId } = req;
+
+    // Bugungi kun
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    // Barcha waiterlarni olish
+    const waiters = await Staff.find({
+      restaurantId,
+      role: "waiter",
+      status: "working",
+    }).select("firstName lastName isWorking");
+
+    // Bugungi attendances
+    const attendances = await Attendance.find({
+      restaurantId,
+      createdAt: { $gte: today, $lt: tomorrow },
+    })
+      .populate("waiterId", "firstName lastName")
+      .sort({ createdAt: -1 });
+
+    res.json({
+      success: true,
+      waiters,
+      attendances,
+    });
+  } catch (error) {
+    console.error("Get restaurant attendance error:", error);
     res.status(500).json({ error: "Server xatosi" });
   }
 });

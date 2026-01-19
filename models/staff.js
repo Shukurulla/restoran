@@ -47,6 +47,11 @@ const staffSchema = mongoose.Schema(
       type: String,
       default: null,
     },
+    // Ishda yoki ishda emas (keldi/ketdi toggle)
+    isWorking: {
+      type: Boolean,
+      default: false,
+    },
     assignedTables: [
       {
         type: mongoose.Schema.Types.ObjectId,
