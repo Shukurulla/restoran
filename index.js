@@ -1218,7 +1218,7 @@ io.on("connection", async (socket) => {
 
   // Buyurtmani bekor qilish
   // - Mijoz (my-orders): faqat tayyorlanmoqda statusida va isReady=false bo'lsa
-  // - Admin: faqat isReady=true (yetkazilgan) taomlarni bekor qilishi mumkin
+  // - Admin: barcha taomlarni bekor qilishi mumkin (hech qanday cheklov yo'q)
   socket.on("cancel_order_item", async (data) => {
     try {
       const { orderId, itemIndex, sessionId, fromAdmin } = data;
@@ -1235,12 +1235,9 @@ io.on("connection", async (socket) => {
         return;
       }
 
-      // Admin uchun - faqat yetkazilgan (isReady=true) taomlarni bekor qilish mumkin
+      // Admin uchun - barcha taomlarni bekor qilish mumkin (hech qanday cheklov yo'q)
       if (fromAdmin) {
-        if (!item.isReady) {
-          socket.emit("cancel_order_response", { success: false, error: "Faqat yetkazilgan taomlarni bekor qilish mumkin" });
-          return;
-        }
+        console.log(`Admin cancelling item: ${item.foodName} from order ${orderId}`);
       } else {
         // Mijoz uchun - faqat pending yoki preparing statusda bekor qilish mumkin
         if (kitchenOrder.status === "ready" || kitchenOrder.status === "served") {
