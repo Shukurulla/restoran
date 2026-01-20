@@ -56,6 +56,7 @@ router.post("/staff/login", async (req, res) => {
         lastName: staff.lastName,
         phone: staff.phone,
         role: staff.role,
+        restaurantId: restaurant._id,
       },
       restaurant: {
         id: restaurant._id,
