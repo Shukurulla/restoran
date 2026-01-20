@@ -3,7 +3,7 @@ const Food = require("../models/foods");
 const router = express.Router();
 const cors = require("cors");
 const multer = require("multer");
-const { authenticateRestaurantAdmin } = require("../middleware/auth");
+const { authenticateRestaurantAdmin, authenticateStaff } = require("../middleware/auth");
 const path = require("path");
 const fs = require("fs");
 
@@ -44,6 +44,20 @@ const upload = multer({
 router.get("/foods", cors(), authenticateRestaurantAdmin, async (req, res) => {
   const foods = await Food.find({ restaurantId: req.restaurantId });
   res.json({ data: foods });
+});
+
+// Waiter uchun taomlarni olish
+router.get("/waiter/foods", cors(), authenticateStaff, async (req, res) => {
+  try {
+    const foods = await Food.find({
+      restaurantId: req.restaurantId,
+      isAvailable: { $ne: false },
+    });
+    res.json({ data: foods });
+  } catch (error) {
+    console.error("Waiter foods error:", error);
+    res.status(500).json({ error: "Server xatosi" });
+  }
 });
 
 router.post("/foods-create", cors(), authenticateRestaurantAdmin, upload.single("image"), async (req, res) => {

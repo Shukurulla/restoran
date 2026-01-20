@@ -2,11 +2,22 @@ const express = require("express");
 const Category = require("../models/category");
 const router = express.Router();
 const cors = require("cors");
-const { authenticateRestaurantAdmin } = require("../middleware/auth");
+const { authenticateRestaurantAdmin, authenticateStaff } = require("../middleware/auth");
 
 router.get("/categories", cors(), authenticateRestaurantAdmin, async (req, res) => {
   const categories = await Category.find({ restaurantId: req.restaurantId });
   res.json({ data: categories });
+});
+
+// Waiter uchun kategoriyalarni olish
+router.get("/waiter/categories", cors(), authenticateStaff, async (req, res) => {
+  try {
+    const categories = await Category.find({ restaurantId: req.restaurantId });
+    res.json({ data: categories });
+  } catch (error) {
+    console.error("Waiter categories error:", error);
+    res.status(500).json({ error: "Server xatosi" });
+  }
 });
 
 router.post("/categories", cors(), authenticateRestaurantAdmin, async (req, res) => {
