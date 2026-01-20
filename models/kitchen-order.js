@@ -112,6 +112,26 @@ const kitchenOrderSchema = new mongoose.Schema(
       depositItem: String,
       dueDate: Date,
     },
+    // Waiter tomonidan tasdiqlangan (mijoz orderini waiter tasdiqlashi kerak)
+    waiterApproved: {
+      type: Boolean,
+      default: false,
+    },
+    // Waiter tasdiqlagan vaqt
+    approvedAt: {
+      type: Date,
+      default: null,
+    },
+    // Waiter tomonidan rad etilgan
+    waiterRejected: {
+      type: Boolean,
+      default: false,
+    },
+    // Rad etish sababi
+    rejectionReason: {
+      type: String,
+      default: null,
+    },
   },
   {
     timestamps: true,

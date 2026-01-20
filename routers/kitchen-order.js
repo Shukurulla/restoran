@@ -47,7 +47,7 @@ router.get("/kitchen-orders/today", cors(), async (req, res) => {
 router.get("/kitchen-orders/waiter/:waiterId", cors(), async (req, res) => {
   try {
     const { waiterId } = req.params;
-    const { date, showPaid, restaurantId } = req.query; // YYYY-MM-DD format, showPaid=true for history
+    const { date, showPaid, restaurantId, pendingApproval } = req.query; // YYYY-MM-DD format, showPaid=true for history, pendingApproval=true for pending orders
 
     // Waiter'ning restaurantId sini olish
     const Staff = require("../models/staff");
@@ -65,6 +65,23 @@ router.get("/kitchen-orders/waiter/:waiterId", cors(), async (req, res) => {
       restaurantId: effectiveRestaurantId,
       waiterId: waiterId
     };
+
+    // Agar pendingApproval=true bo'lsa, faqat tasdiqlash kutilayotgan buyurtmalarni ko'rsatish
+    if (pendingApproval === 'true') {
+      filter.waiterApproved = { $ne: true };
+      filter.waiterRejected = { $ne: true };
+      // Bugungi buyurtmalar
+      const startOfDay = new Date();
+      startOfDay.setHours(0, 0, 0, 0);
+      const endOfDay = new Date();
+      endOfDay.setHours(23, 59, 59, 999);
+      filter.createdAt = { $gte: startOfDay, $lte: endOfDay };
+
+      console.log(`Getting pending approval orders for waiter ${waiterId}, filter:`, filter);
+      const orders = await KitchenOrder.find(filter).sort({ createdAt: -1 });
+      console.log(`Found ${orders.length} pending approval orders`);
+      return res.json({ data: orders });
+    }
 
     // Agar showPaid=true bo'lmasa, faqat to'lanmagan (faol) buyurtmalarni ko'rsatish
     if (showPaid !== 'true') {
@@ -87,6 +104,13 @@ router.get("/kitchen-orders/waiter/:waiterId", cors(), async (req, res) => {
       endOfDay.setHours(23, 59, 59, 999);
       filter.createdAt = { $gte: startOfDay, $lte: endOfDay };
     }
+
+    // Default: faqat tasdiqlangan orderlarni ko'rsatish (waiterApproved=true yoki eski orderlar)
+    // Eski orderlar uchun waiterApproved field yo'q bo'lishi mumkin
+    filter.$or = [
+      { waiterApproved: true },
+      { waiterApproved: { $exists: false } }
+    ];
 
     console.log(`Getting orders for waiter ${waiterId}, restaurantId: ${effectiveRestaurantId}, filter:`, filter);
 

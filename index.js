@@ -550,6 +550,10 @@ io.on("connection", async (socket) => {
       // Map'dan array'ga o'tkazish
       itemsMap.forEach((item) => newItems.push(item));
 
+      // Agar mijozdan kelgan bo'lsa (fromWaiter=false), waiter tasdiqlashi kerak
+      // Agar waiterdan kelgan bo'lsa (fromWaiter=true), to'g'ridan-to'g'ri kitchen/cashierga boradi
+      const needsWaiterApproval = !fromWaiter;
+
       if (existingOrder) {
         // Mavjud orderga qo'shish
         existingOrder.allOrders = [
@@ -563,6 +567,11 @@ io.on("connection", async (socket) => {
         existingOrder.totalPrice =
           (parseFloat(existingOrder.totalPrice) || 0) +
           (parseFloat(data.totalPrice) || 0);
+
+        // Agar mijozdan kelgan bo'lsa, tasdiqlash kutilmoqda
+        if (needsWaiterApproval) {
+          existingOrder.waiterApproved = false;
+        }
         await existingOrder.save();
         order = existingOrder;
 
@@ -577,34 +586,59 @@ io.on("connection", async (socket) => {
             kitchenOrder.status = "preparing";
             kitchenOrder.allItemsReady = false;
           }
+          // Agar mijozdan kelgan bo'lsa, tasdiqlash kutilmoqda
+          if (needsWaiterApproval) {
+            kitchenOrder.waiterApproved = false;
+          }
           await kitchenOrder.save();
 
-          // Mavjud orderga qo'shilganda ham waiter'ga xabar yuborish
+          // Mavjud orderga qo'shilganda waiter'ga xabar yuborish
           if (kitchenOrder.waiterId) {
             const waiter = await Staff.findById(kitchenOrder.waiterId);
             if (waiter) {
               console.log(`Sending new_order_items to waiter ${waiter._id} (${waiter.firstName})`);
               console.log(`Waiter FCM token exists: ${!!waiter.fcmToken}`);
 
-              io.to(`waiter_${waiter._id}`).emit("new_order_items", {
-                order: kitchenOrder,
-                tableName,
-                tableNumber,
-                newItems: newItems,
-                message: `${tableName} ga yangi buyurtma qo'shildi!`,
-              });
+              // Agar mijozdan kelgan bo'lsa - tasdiqlash so'rovi
+              if (needsWaiterApproval) {
+                io.to(`waiter_${waiter._id}`).emit("pending_order_approval", {
+                  order: kitchenOrder,
+                  tableName,
+                  tableNumber,
+                  newItems: newItems,
+                  isAddingToExisting: true,
+                  message: `${tableName} dan yangi buyurtma tasdiqlash kutilmoqda!`,
+                });
 
-              // Push notification yuborish
-              if (waiter.fcmToken) {
-                console.log(`Sending push notification for new items to waiter ${waiter._id}`);
-                sendPushNotification(
-                  waiter.fcmToken,
-                  "Yangi buyurtma qo'shildi!",
-                  `${tableName} ga yangi buyurtma qo'shildi`,
-                  { type: "new_order_items", orderId: kitchenOrder._id.toString() }
-                );
+                // Push notification yuborish
+                if (waiter.fcmToken) {
+                  sendPushNotification(
+                    waiter.fcmToken,
+                    "Buyurtma tasdiqlash!",
+                    `${tableName} dan yangi buyurtma - tasdiqlang!`,
+                    { type: "pending_order_approval", orderId: kitchenOrder._id.toString() }
+                  );
+                }
               } else {
-                console.log(`Waiter ${waiter._id} (${waiter.firstName}) has no FCM token for new_order_items`);
+                // Waiterdan kelgan - oddiy xabar
+                io.to(`waiter_${waiter._id}`).emit("new_order_items", {
+                  order: kitchenOrder,
+                  tableName,
+                  tableNumber,
+                  newItems: newItems,
+                  message: `${tableName} ga yangi buyurtma qo'shildi!`,
+                });
+
+                // Push notification yuborish
+                if (waiter.fcmToken) {
+                  console.log(`Sending push notification for new items to waiter ${waiter._id}`);
+                  sendPushNotification(
+                    waiter.fcmToken,
+                    "Yangi buyurtma qo'shildi!",
+                    `${tableName} ga yangi buyurtma qo'shildi`,
+                    { type: "new_order_items", orderId: kitchenOrder._id.toString() }
+                  );
+                }
               }
             }
           }
@@ -625,6 +659,9 @@ io.on("connection", async (socket) => {
           userInfo: data.userInfo,
           surcharge: data.surcharge || 0,
           agent: data.agent,
+          // Agar mijozdan kelgan bo'lsa - tasdiqlanmagan
+          waiterApproved: !needsWaiterApproval,
+          approvedAt: needsWaiterApproval ? null : new Date(),
         });
 
         // Ofitsiyantni tayinlash
@@ -653,22 +690,17 @@ io.on("connection", async (socket) => {
             : null,
           items: newItems,
           status: "pending",
+          // Agar mijozdan kelgan bo'lsa - tasdiqlanmagan
+          waiterApproved: !needsWaiterApproval,
+          approvedAt: needsWaiterApproval ? null : new Date(),
         });
 
         // Ofitsiyantga xabar
         if (assignedWaiter) {
-          console.log(`Sending new_table_assigned to waiter ${assignedWaiter._id} (${assignedWaiter.firstName})`);
+          console.log(`Sending notification to waiter ${assignedWaiter._id} (${assignedWaiter.firstName}), needsApproval=${needsWaiterApproval}`);
           console.log(`Waiter FCM token exists: ${!!assignedWaiter.fcmToken}`);
 
-          io.to(`waiter_${assignedWaiter._id}`).emit("new_table_assigned", {
-            order: kitchenOrder,
-            tableName,
-            tableNumber,
-            message: `${tableName} dan yangi buyurtma keldi!`,
-          });
-
-          // Push notification yuborish (app yopiq bo'lsa ham)
-          // Agar waiter fallback bo'lsa, FCM token'ni bazadan qayta olish
+          // Push notification uchun FCM token
           let fcmToken = assignedWaiter.fcmToken;
           if (!fcmToken) {
             const freshWaiter = await Staff.findById(assignedWaiter._id).select('fcmToken');
@@ -676,16 +708,43 @@ io.on("connection", async (socket) => {
             console.log(`Fetched fresh FCM token for waiter ${assignedWaiter._id}: ${!!fcmToken}`);
           }
 
-          if (fcmToken) {
-            console.log(`Sending push notification for new table to waiter ${assignedWaiter._id}`);
-            sendPushNotification(
-              fcmToken,
-              "Yangi buyurtma!",
-              `${tableName} dan yangi buyurtma keldi`,
-              { type: "new_table_assigned", orderId: kitchenOrder._id.toString() }
-            );
+          if (needsWaiterApproval) {
+            // Mijozdan kelgan - tasdiqlash so'rovi
+            io.to(`waiter_${assignedWaiter._id}`).emit("pending_order_approval", {
+              order: kitchenOrder,
+              tableName,
+              tableNumber,
+              newItems: newItems,
+              isAddingToExisting: false,
+              message: `${tableName} dan yangi buyurtma tasdiqlash kutilmoqda!`,
+            });
+
+            if (fcmToken) {
+              sendPushNotification(
+                fcmToken,
+                "Buyurtma tasdiqlash!",
+                `${tableName} dan yangi buyurtma - tasdiqlang!`,
+                { type: "pending_order_approval", orderId: kitchenOrder._id.toString() }
+              );
+            }
           } else {
-            console.log(`Waiter ${assignedWaiter._id} (${assignedWaiter.firstName}) has no FCM token for new_table_assigned`);
+            // Waiterdan kelgan - oddiy xabar
+            io.to(`waiter_${assignedWaiter._id}`).emit("new_table_assigned", {
+              order: kitchenOrder,
+              tableName,
+              tableNumber,
+              message: `${tableName} dan yangi buyurtma keldi!`,
+            });
+
+            if (fcmToken) {
+              console.log(`Sending push notification for new table to waiter ${assignedWaiter._id}`);
+              sendPushNotification(
+                fcmToken,
+                "Yangi buyurtma!",
+                `${tableName} dan yangi buyurtma keldi`,
+                { type: "new_table_assigned", orderId: kitchenOrder._id.toString() }
+              );
+            }
           }
         } else {
           console.log(`No waiter assigned for table ${tableName}`);
@@ -693,12 +752,27 @@ io.on("connection", async (socket) => {
       }
 
       // Mijozga javob
-      socket.emit("get_message", { msg: "success", orderId: order._id });
+      socket.emit("get_message", { msg: "success", orderId: order._id, needsApproval: needsWaiterApproval });
 
-      // FAQAT BIRIKTIRILGAN WAITER'GA XABAR YUBORISH (boshqa waiterlarga EMAS!)
-      // Agar yangi order bo'lsa - assignedWaiter'ga yuborilgan
-      // Agar mavjud orderga qo'shilgan bo'lsa - kitchenOrder.waiterId ga yuborilgan
-      // Shuning uchun bu yerda faqat admin/kitchen panellar uchun broadcast qilamiz
+      // MUHIM: Agar mijozdan kelgan bo'lsa va tasdiqlash kerak bo'lsa
+      // Kitchen va Cashier ga XABAR YUBORMAYMIZ - waiter tasdiqlagunicha kutamiz
+      if (needsWaiterApproval) {
+        console.log(`Order ${order._id} waiting for waiter approval - NOT sending to kitchen/cashier`);
+        // Faqat admin panelga xabar (monitoring uchun)
+        io.to(`admin_${restaurantId}`).emit("new_order_pending_approval", {
+          order: kitchenOrder,
+          tableName,
+          tableNumber,
+          isNewOrder,
+          message: `${tableName} dan yangi buyurtma - waiter tasdiqlashi kutilmoqda`,
+        });
+        return; // Kitchen va cashierga xabar yubormaymiz
+      }
+
+      // ============================================
+      // FAQAT WAITER TASDIQLAGAN ORDERLAR UCHUN
+      // (fromWaiter=true yoki waiter approve qilgandan keyin)
+      // ============================================
 
       // Admin panel uchun (real-time updates)
       io.to(`admin_${restaurantId}`).emit("new_order", {
@@ -711,10 +785,11 @@ io.on("connection", async (socket) => {
           : `${tableName} ga yangi buyurtma qo'shildi!`,
       });
 
-      // Oshpazlarga xabar
+      // Oshpazlarga xabar - FAQAT TASDIQLANGAN ORDERLAR
       const kitchenOrders = await KitchenOrder.find({
         restaurantId,
         status: { $in: ["pending", "preparing"] },
+        waiterApproved: true, // Faqat tasdiqlangan orderlar
       })
         .sort({ createdAt: 1 })
         .populate("waiterId");
@@ -916,6 +991,178 @@ io.on("connection", async (socket) => {
       io.to("kitchen").emit("kitchen_orders_updated", kitchenOrders); // Legacy
     } catch (error) {
       console.error("Notify waiter error:", error);
+    }
+  });
+
+  // =====================================================
+  // WAITER TOMONIDAN BUYURTMANI TASDIQLASH
+  // Mijozdan kelgan buyurtmani waiter tasdiqlaydi
+  // =====================================================
+  socket.on("approve_order", async (data) => {
+    try {
+      const { orderId, waiterId } = data;
+      console.log(`Waiter ${waiterId} approving order ${orderId}`);
+
+      const kitchenOrder = await KitchenOrder.findById(orderId);
+      if (!kitchenOrder) {
+        socket.emit("approve_order_response", { success: false, error: "Buyurtma topilmadi" });
+        return;
+      }
+
+      // Order allaqachon tasdiqlangan
+      if (kitchenOrder.waiterApproved) {
+        socket.emit("approve_order_response", { success: false, error: "Buyurtma allaqachon tasdiqlangan" });
+        return;
+      }
+
+      // KitchenOrderni tasdiqlash
+      kitchenOrder.waiterApproved = true;
+      kitchenOrder.approvedAt = new Date();
+      await kitchenOrder.save();
+
+      // Order modelini ham tasdiqlash
+      await Order.findByIdAndUpdate(kitchenOrder.orderId, {
+        waiterApproved: true,
+        approvedAt: new Date(),
+      });
+
+      const restaurantId = kitchenOrder.restaurantId;
+      const tableName = kitchenOrder.tableName;
+      const tableNumber = kitchenOrder.tableNumber;
+
+      // Waiter'ga tasdiqlash xabari
+      socket.emit("approve_order_response", { success: true, orderId: kitchenOrder._id });
+
+      // ENDI Kitchen va Cashier ga xabar yuboramiz
+      console.log(`Order ${orderId} approved - sending to kitchen and cashier`);
+
+      // Oshpazlarga xabar
+      const kitchenOrders = await KitchenOrder.find({
+        restaurantId,
+        status: { $in: ["pending", "preparing"] },
+        waiterApproved: true,
+      })
+        .sort({ createdAt: 1 })
+        .populate("waiterId");
+
+      io.to(`kitchen_${restaurantId}`).emit("new_kitchen_order", {
+        order: kitchenOrder,
+        allOrders: kitchenOrders,
+        isNewOrder: true,
+        newItems: kitchenOrder.items,
+      });
+
+      io.to("kitchen").emit("new_kitchen_order", {
+        order: kitchenOrder,
+        allOrders: kitchenOrders,
+        isNewOrder: true,
+        newItems: kitchenOrder.items,
+      });
+
+      // Kassaga xabar
+      const order = await Order.findById(kitchenOrder.orderId);
+      io.to(`cashier_${restaurantId}`).emit("new_kitchen_order", {
+        order: kitchenOrder,
+      });
+      io.to("cashier").emit("new_kitchen_order", { order: kitchenOrder });
+
+      io.to(`cashier_${restaurantId}`).emit("new_order_for_cashier", order);
+      io.to("cashier").emit("new_order_for_cashier", order);
+
+      // Admin panel uchun
+      io.to(`admin_${restaurantId}`).emit("new_order", {
+        order: kitchenOrder,
+        tableName,
+        tableNumber,
+        isNewOrder: true,
+        message: `${tableName} dan buyurtma tasdiqlandi!`,
+      });
+
+      // Barcha buyurtmalarni broadcast
+      const orders = await Order.find({ restaurantId });
+      io.to(`restaurant_${restaurantId}`).emit("get_order", orders);
+
+      console.log(`Order ${orderId} approved and sent to kitchen/cashier`);
+    } catch (error) {
+      console.error("Approve order error:", error);
+      socket.emit("approve_order_response", { success: false, error: error.message });
+    }
+  });
+
+  // =====================================================
+  // WAITER TOMONIDAN BUYURTMANI RAD ETISH
+  // Mijozdan kelgan buyurtmani waiter rad etadi
+  // =====================================================
+  socket.on("reject_order", async (data) => {
+    try {
+      const { orderId, waiterId, reason } = data;
+      console.log(`Waiter ${waiterId} rejecting order ${orderId}, reason: ${reason}`);
+
+      const kitchenOrder = await KitchenOrder.findById(orderId);
+      if (!kitchenOrder) {
+        socket.emit("reject_order_response", { success: false, error: "Buyurtma topilmadi" });
+        return;
+      }
+
+      // Order allaqachon tasdiqlangan
+      if (kitchenOrder.waiterApproved) {
+        socket.emit("reject_order_response", { success: false, error: "Tasdiqlangan buyurtmani rad etib bo'lmaydi" });
+        return;
+      }
+
+      const restaurantId = kitchenOrder.restaurantId;
+      const tableName = kitchenOrder.tableName;
+      const tableNumber = kitchenOrder.tableNumber;
+      const orderObjId = kitchenOrder.orderId;
+      const tableId = kitchenOrder.tableId;
+
+      // KitchenOrderni rad etilgan deb belgilash
+      kitchenOrder.waiterRejected = true;
+      kitchenOrder.rejectionReason = reason || "Waiter tomonidan rad etildi";
+      await kitchenOrder.save();
+
+      // Order modelini ham rad etilgan deb belgilash va statusni cancelled qilish
+      await Order.findByIdAndUpdate(orderObjId, {
+        waiterRejected: true,
+        rejectionReason: reason || "Waiter tomonidan rad etildi",
+        status: "cancelled",
+      });
+
+      // Stolni bo'shatish
+      if (tableId) {
+        await Table.findByIdAndUpdate(tableId, {
+          status: "free",
+        });
+      }
+
+      // Waiter'ga tasdiqlash xabari
+      socket.emit("reject_order_response", { success: true, orderId: kitchenOrder._id });
+
+      // Mijozga xabar yuborish (agar session bo'lsa)
+      const order = await Order.findById(orderObjId);
+      if (order && order.sessionId) {
+        io.to(`session_${order.sessionId}`).emit("order_rejected", {
+          orderId: orderObjId,
+          kitchenOrderId: kitchenOrder._id,
+          tableName,
+          reason: reason || "Buyurtma rad etildi",
+          message: `Buyurtmangiz rad etildi: ${reason || "Waiter tomonidan rad etildi"}`,
+        });
+      }
+
+      // Admin panel uchun
+      io.to(`admin_${restaurantId}`).emit("order_rejected", {
+        order: kitchenOrder,
+        tableName,
+        tableNumber,
+        reason: reason || "Waiter tomonidan rad etildi",
+        message: `${tableName} dan buyurtma rad etildi`,
+      });
+
+      console.log(`Order ${orderId} rejected by waiter`);
+    } catch (error) {
+      console.error("Reject order error:", error);
+      socket.emit("reject_order_response", { success: false, error: error.message });
     }
   });
 
