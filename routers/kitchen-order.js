@@ -21,12 +21,20 @@ router.get("/kitchen-orders", cors(), async (req, res) => {
 // Bugungi barcha kitchen orderlar
 router.get("/kitchen-orders/today", cors(), async (req, res) => {
   try {
+    const { restaurantId } = req.query;
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    const orders = await KitchenOrder.find({
+    const filter = {
       createdAt: { $gte: today },
-    })
+    };
+
+    // RestaurantId bo'yicha filter
+    if (restaurantId) {
+      filter.restaurantId = restaurantId;
+    }
+
+    const orders = await KitchenOrder.find(filter)
       .sort({ createdAt: -1 })
       .populate("waiterId");
     res.json({ data: orders });

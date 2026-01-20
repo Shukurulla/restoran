@@ -340,15 +340,13 @@ io.on("connection", async (socket) => {
     // data object yoki string bo'lishi mumkin
     const restaurantId = typeof data === 'object' ? data.restaurantId : data;
     socket.join(`kitchen_${restaurantId || "default"}`);
-    socket.join("kitchen"); // Legacy support - backend hali ham bu roomga emit qiladi
-    console.log(`Cook connected to kitchen_${restaurantId} and kitchen`);
+    console.log(`Cook connected to kitchen_${restaurantId}`);
   });
 
   socket.on("cashier_connect", async (data) => {
     // data object yoki string bo'lishi mumkin
     const restaurantId = typeof data === 'object' ? data.restaurantId : data;
     socket.join(`cashier_${restaurantId || "default"}`);
-    socket.join("cashier"); // Legacy support
     console.log(`Cashier connected to cashier_${restaurantId}`);
 
     // Kassirga buyurtmalarni yuborish
@@ -726,22 +724,13 @@ io.on("connection", async (socket) => {
         newItems: newItems, // Faqat yangi qo'shilgan itemlar - print uchun
       });
 
-      // Legacy support
-      io.to("kitchen").emit("new_kitchen_order", {
-        order: kitchenOrder,
-        allOrders: kitchenOrders,
-        newItems: newItems,
-      });
-
       // Kassaga xabar
       io.to(`cashier_${restaurantId}`).emit("new_kitchen_order", {
         order: kitchenOrder,
       });
-      io.to("cashier").emit("new_kitchen_order", { order: kitchenOrder });
 
       // Kassirga yangi buyurtma xabari (order formatida)
       io.to(`cashier_${restaurantId}`).emit("new_order_for_cashier", order);
-      io.to("cashier").emit("new_order_for_cashier", order);
 
       // Barcha buyurtmalarni faqat shu restoranga broadcast
       const orders = await Order.find({ restaurantId });
@@ -820,8 +809,6 @@ io.on("connection", async (socket) => {
         "kitchen_orders_updated",
         kitchenOrders
       );
-      io.to("kitchen").emit("kitchen_orders_updated", kitchenOrders);
-      io.to("cashier").emit("kitchen_orders_updated", kitchenOrders);
 
       // Waiter'ga ham xabar yuborish - faqat shu paytda tayyor bo'lgan 1 ta taom
       if (order.waiterId && item.isReady) {
@@ -912,7 +899,6 @@ io.on("connection", async (socket) => {
         "kitchen_orders_updated",
         kitchenOrders
       );
-      io.to("kitchen").emit("kitchen_orders_updated", kitchenOrders);
     } catch (error) {
       console.error("Notify waiter error:", error);
     }
@@ -948,8 +934,6 @@ io.on("connection", async (socket) => {
         "kitchen_orders_updated",
         kitchenOrders
       );
-      io.to("kitchen").emit("kitchen_orders_updated", kitchenOrders);
-      io.to("cashier").emit("kitchen_orders_updated", kitchenOrders);
 
       // Ofitsiyantga tasdiqlash
       if (order.waiterId) {
@@ -1025,10 +1009,6 @@ io.on("connection", async (socket) => {
         orderId: order._id,
         tableName: order.tableName,
       });
-      io.to("cashier").emit("order_paid_success", {
-        orderId: order._id,
-        tableName: order.tableName,
-      });
 
       const kitchenOrders = await KitchenOrder.find({
         restaurantId: order.restaurantId,
@@ -1041,7 +1021,6 @@ io.on("connection", async (socket) => {
         "kitchen_orders_updated",
         kitchenOrders
       );
-      io.to("kitchen").emit("kitchen_orders_updated", kitchenOrders);
     } catch (error) {
       console.error("Mark paid error:", error);
     }
@@ -1085,10 +1064,6 @@ io.on("connection", async (socket) => {
 
       // Boshqa kassirlar uchun order_paid event
       io.to(`cashier_${restaurantId}`).emit("order_paid", {
-        orderId: order._id,
-        paymentType: paymentType
-      });
-      io.to("cashier").emit("order_paid", {
         orderId: order._id,
         paymentType: paymentType
       });
@@ -1268,16 +1243,17 @@ io.on("connection", async (socket) => {
       const newTotalPrice = kitchenOrder.items.reduce((sum, i) => sum + (i.price || 0) * (i.quantity || 1), 0);
       kitchenOrder.totalPrice = newTotalPrice;
 
-      // Agar barcha itemlar o'chirilgan bo'lsa - orderni cancelled qilish
+      // Agar barcha itemlar o'chirilgan bo'lsa - orderni to'liq o'chirish
       if (kitchenOrder.items.length === 0) {
-        kitchenOrder.status = "served"; // yoki cancelled
-        await Order.findByIdAndUpdate(kitchenOrder.orderId, { status: "cancelled", totalPrice: 0 });
+        // KitchenOrder va Order'ni to'liq o'chirish
+        await Order.findByIdAndDelete(kitchenOrder.orderId);
+        await KitchenOrder.findByIdAndDelete(kitchenOrder._id);
+        console.log(`Order ${orderId} to'liq o'chirildi - barcha itemlar bekor qilindi`);
       } else {
         // Order totalPrice ni ham yangilash
         await Order.findByIdAndUpdate(kitchenOrder.orderId, { totalPrice: newTotalPrice });
+        await kitchenOrder.save();
       }
-
-      await kitchenOrder.save();
 
       // Oshxonaga xabar
       const kitchenOrders = await KitchenOrder.find({
@@ -1288,7 +1264,6 @@ io.on("connection", async (socket) => {
         .populate("waiterId");
 
       io.to(`kitchen_${kitchenOrder.restaurantId}`).emit("kitchen_orders_updated", kitchenOrders);
-      io.to("kitchen").emit("kitchen_orders_updated", kitchenOrders);
 
       // Waiter (ofitsiant) tomonga ham xabar - restoran room orqali
       io.to(`restaurant_${kitchenOrder.restaurantId}`).emit("kitchen_orders_updated", kitchenOrders);
@@ -1316,7 +1291,6 @@ io.on("connection", async (socket) => {
 
       // Kitchen (cook-panel) ga yuborish
       io.to(`kitchen_${kitchenOrder.restaurantId}`).emit("order_item_cancelled", cancelEventData);
-      io.to("kitchen").emit("order_item_cancelled", cancelEventData); // Legacy support
 
       // My-orders (mijoz) uchun - faqat tegishli sessiyaga
       if (sessionId) {
