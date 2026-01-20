@@ -52,8 +52,11 @@ router.get("/kitchen-orders/waiter/:waiterId", cors(), async (req, res) => {
     // RestaurantId - query'dan yoki waiter'dan
     const effectiveRestaurantId = restaurantId || waiter.restaurantId;
 
-    // Restoran bo'yicha filter (waiterId emas!)
-    let filter = { restaurantId: effectiveRestaurantId };
+    // Waiter bo'yicha filter - har bir waiter faqat o'z orderlarini ko'radi
+    let filter = {
+      restaurantId: effectiveRestaurantId,
+      waiterId: waiterId
+    };
 
     // Agar showPaid=true bo'lmasa, faqat to'lanmagan (faol) buyurtmalarni ko'rsatish
     if (showPaid !== 'true') {
@@ -232,9 +235,10 @@ router.get("/waiter/:waiterId/stats", cors(), async (req, res) => {
       return res.status(404).json({ error: "Waiter not found" });
     }
 
-    // Shu restoranning BARCHA to'lanmagan buyurtmalarini olish
+    // Shu waiter'ning o'z to'lanmagan buyurtmalarini olish
     const orders = await KitchenOrder.find({
       restaurantId: waiter.restaurantId,
+      waiterId: waiterId,
       createdAt: { $gte: today },
       isPaid: false, // Faqat to'lanmagan (faol) buyurtmalar
     });
@@ -272,9 +276,10 @@ router.get("/waiter/:waiterId/active-tables", cors(), async (req, res) => {
       return res.status(404).json({ error: "Waiter not found" });
     }
 
-    // Shu restoranning BARCHA faol buyurtmalarini olish (waiterId bo'yicha emas)
+    // Shu waiter'ning o'z faol buyurtmalarini olish
     const orders = await KitchenOrder.find({
       restaurantId: waiter.restaurantId,
+      waiterId: waiterId,
       createdAt: { $gte: today },
       status: { $in: ["pending", "preparing", "ready"] },
       isPaid: false, // Faqat to'lanmagan buyurtmalar
