@@ -340,6 +340,7 @@ io.on("connection", async (socket) => {
     // data object yoki string bo'lishi mumkin
     const restaurantId = typeof data === 'object' ? data.restaurantId : data;
     socket.join(`kitchen_${restaurantId || "default"}`);
+    socket.join("kitchen"); // Legacy support - eski clientlar uchun
     console.log(`Cook connected to kitchen_${restaurantId}`);
   });
 
@@ -722,6 +723,14 @@ io.on("connection", async (socket) => {
         allOrders: kitchenOrders,
         isNewOrder,
         newItems: newItems, // Faqat yangi qo'shilgan itemlar - print uchun
+      });
+
+      // Legacy support - global kitchen room (ikki marta print oldini olish uchun deduplication client'da)
+      io.to("kitchen").emit("new_kitchen_order", {
+        order: kitchenOrder,
+        allOrders: kitchenOrders,
+        isNewOrder,
+        newItems: newItems,
       });
 
       // Kassaga xabar
