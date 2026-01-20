@@ -483,11 +483,28 @@ io.on("connection", async (socket) => {
       }
 
       // Stol uchun mavjud ochiq orderni tekshirish (Order Merging)
-      let existingOrder = await Order.findOne({
-        restaurantId,
-        tableId,
-        status: { $nin: ["paid", "cancelled"] },
-      });
+      // MUHIM: Faqat tasdiqlanMAGAN orderlarga qo'shish mumkin
+      // Agar order allaqachon tasdiqlangan bo'lsa - yangi order yaratiladi
+      let existingOrder = null;
+
+      // Agar waiterdan kelgan bo'lsa - mavjud ochiq orderga qo'shish mumkin
+      // Agar mijozdan kelgan bo'lsa - faqat tasdiqlanmagan orderga qo'shish
+      if (fromWaiter) {
+        // Waiterdan - istalgan ochiq orderga qo'shish
+        existingOrder = await Order.findOne({
+          restaurantId,
+          tableId,
+          status: { $nin: ["paid", "cancelled"] },
+        });
+      } else {
+        // Mijozdan - faqat tasdiqlanmagan orderga qo'shish
+        existingOrder = await Order.findOne({
+          restaurantId,
+          tableId,
+          status: { $nin: ["paid", "cancelled"] },
+          waiterApproved: { $ne: true }, // Faqat tasdiqlanmagan
+        });
+      }
 
       let order;
       let kitchenOrder;
