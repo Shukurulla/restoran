@@ -1216,20 +1216,16 @@ io.on("connection", async (socket) => {
     }
   });
 
-  // Buyurtmani bekor qilish (faqat tayyorlanmoqda statusida)
+  // Buyurtmani bekor qilish
+  // - Mijoz (my-orders): faqat tayyorlanmoqda statusida va isReady=false bo'lsa
+  // - Admin: faqat isReady=true (yetkazilgan) taomlarni bekor qilishi mumkin
   socket.on("cancel_order_item", async (data) => {
     try {
-      const { orderId, itemIndex, sessionId } = data;
+      const { orderId, itemIndex, sessionId, fromAdmin } = data;
 
       const kitchenOrder = await KitchenOrder.findById(orderId);
       if (!kitchenOrder) {
         socket.emit("cancel_order_response", { success: false, error: "Buyurtma topilmadi" });
-        return;
-      }
-
-      // Faqat pending yoki preparing statusda bekor qilish mumkin
-      if (kitchenOrder.status === "ready" || kitchenOrder.status === "served") {
-        socket.emit("cancel_order_response", { success: false, error: "Bu buyurtmani bekor qilib bo'lmaydi" });
         return;
       }
 
@@ -1239,10 +1235,24 @@ io.on("connection", async (socket) => {
         return;
       }
 
-      // Agar item tayyor bo'lsa - bekor qilib bo'lmaydi
-      if (item.isReady) {
-        socket.emit("cancel_order_response", { success: false, error: "Tayyor bo'lgan ovqatni bekor qilib bo'lmaydi" });
-        return;
+      // Admin uchun - faqat yetkazilgan (isReady=true) taomlarni bekor qilish mumkin
+      if (fromAdmin) {
+        if (!item.isReady) {
+          socket.emit("cancel_order_response", { success: false, error: "Faqat yetkazilgan taomlarni bekor qilish mumkin" });
+          return;
+        }
+      } else {
+        // Mijoz uchun - faqat pending yoki preparing statusda bekor qilish mumkin
+        if (kitchenOrder.status === "ready" || kitchenOrder.status === "served") {
+          socket.emit("cancel_order_response", { success: false, error: "Bu buyurtmani bekor qilib bo'lmaydi" });
+          return;
+        }
+
+        // Agar item tayyor bo'lsa - mijoz bekor qila olmaydi
+        if (item.isReady) {
+          socket.emit("cancel_order_response", { success: false, error: "Tayyor bo'lgan ovqatni bekor qilib bo'lmaydi" });
+          return;
+        }
       }
 
       // O'chirilayotgan item ma'lumotlarini saqlash (notification uchun)
