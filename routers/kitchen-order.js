@@ -7,9 +7,24 @@ const cors = require("cors");
 // Barcha kitchen orderlarni olish (oshpaz uchun)
 router.get("/kitchen-orders", cors(), async (req, res) => {
   try {
-    const orders = await KitchenOrder.find({
+    const { restaurantId } = req.query;
+
+    const filter = {
       status: { $in: ["pending", "preparing"] },
-    })
+      // MUHIM: Faqat waiter tomonidan tasdiqlangan orderlarni ko'rsatish
+      // yoki eski orderlar (waiterApproved field yo'q)
+      $or: [
+        { waiterApproved: true },
+        { waiterApproved: { $exists: false } }
+      ]
+    };
+
+    // RestaurantId bo'yicha filter
+    if (restaurantId) {
+      filter.restaurantId = restaurantId;
+    }
+
+    const orders = await KitchenOrder.find(filter)
       .sort({ createdAt: 1 })
       .populate("waiterId");
     res.json({ data: orders });
