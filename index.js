@@ -348,6 +348,7 @@ io.on("connection", async (socket) => {
     // data object yoki string bo'lishi mumkin
     const restaurantId = typeof data === 'object' ? data.restaurantId : data;
     socket.join(`cashier_${restaurantId || "default"}`);
+    socket.join("cashier"); // Legacy support
     console.log(`Cashier connected to cashier_${restaurantId}`);
 
     // Kassirga buyurtmalarni yuborish
@@ -737,9 +738,11 @@ io.on("connection", async (socket) => {
       io.to(`cashier_${restaurantId}`).emit("new_kitchen_order", {
         order: kitchenOrder,
       });
+      io.to("cashier").emit("new_kitchen_order", { order: kitchenOrder }); // Legacy
 
       // Kassirga yangi buyurtma xabari (order formatida)
       io.to(`cashier_${restaurantId}`).emit("new_order_for_cashier", order);
+      io.to("cashier").emit("new_order_for_cashier", order); // Legacy
 
       // Barcha buyurtmalarni faqat shu restoranga broadcast
       const orders = await Order.find({ restaurantId });
@@ -814,10 +817,12 @@ io.on("connection", async (socket) => {
         "kitchen_orders_updated",
         kitchenOrders
       );
+      io.to("kitchen").emit("kitchen_orders_updated", kitchenOrders); // Legacy support
       io.to(`cashier_${order.restaurantId}`).emit(
         "kitchen_orders_updated",
         kitchenOrders
       );
+      io.to("cashier").emit("kitchen_orders_updated", kitchenOrders); // Legacy support
 
       // Waiter'ga ham xabar yuborish - faqat shu paytda tayyor bo'lgan 1 ta taom
       if (order.waiterId && item.isReady) {
@@ -908,6 +913,7 @@ io.on("connection", async (socket) => {
         "kitchen_orders_updated",
         kitchenOrders
       );
+      io.to("kitchen").emit("kitchen_orders_updated", kitchenOrders); // Legacy
     } catch (error) {
       console.error("Notify waiter error:", error);
     }
@@ -939,10 +945,12 @@ io.on("connection", async (socket) => {
         "kitchen_orders_updated",
         kitchenOrders
       );
+      io.to("kitchen").emit("kitchen_orders_updated", kitchenOrders); // Legacy
       io.to(`cashier_${order.restaurantId}`).emit(
         "kitchen_orders_updated",
         kitchenOrders
       );
+      io.to("cashier").emit("kitchen_orders_updated", kitchenOrders); // Legacy
 
       // Ofitsiyantga tasdiqlash
       if (order.waiterId) {
@@ -1018,6 +1026,7 @@ io.on("connection", async (socket) => {
         orderId: order._id,
         tableName: order.tableName,
       });
+      io.to("cashier").emit("order_paid_success", { orderId: order._id, tableName: order.tableName }); // Legacy
 
       const kitchenOrders = await KitchenOrder.find({
         restaurantId: order.restaurantId,
@@ -1030,6 +1039,7 @@ io.on("connection", async (socket) => {
         "kitchen_orders_updated",
         kitchenOrders
       );
+      io.to("kitchen").emit("kitchen_orders_updated", kitchenOrders); // Legacy
     } catch (error) {
       console.error("Mark paid error:", error);
     }
@@ -1076,6 +1086,7 @@ io.on("connection", async (socket) => {
         orderId: order._id,
         paymentType: paymentType
       });
+      io.to("cashier").emit("order_paid", { orderId: order._id, paymentType }); // Legacy
 
       console.log(`Payment confirmed for order ${orderId}`);
     } catch (error) {
@@ -1273,12 +1284,14 @@ io.on("connection", async (socket) => {
         .populate("waiterId");
 
       io.to(`kitchen_${kitchenOrder.restaurantId}`).emit("kitchen_orders_updated", kitchenOrders);
+      io.to("kitchen").emit("kitchen_orders_updated", kitchenOrders); // Legacy
 
       // Waiter (ofitsiant) tomonga ham xabar - restoran room orqali
       io.to(`restaurant_${kitchenOrder.restaurantId}`).emit("kitchen_orders_updated", kitchenOrders);
 
       // Kassir tomonga xabar
       io.to(`cashier_${kitchenOrder.restaurantId}`).emit("kitchen_orders_updated", kitchenOrders);
+      io.to("cashier").emit("kitchen_orders_updated", kitchenOrders); // Legacy
       io.to(`cashier_${kitchenOrder.restaurantId}`).emit("order_updated", {
         orderId: kitchenOrder.orderId,
         kitchenOrderId: kitchenOrder._id,
@@ -1300,6 +1313,7 @@ io.on("connection", async (socket) => {
 
       // Kitchen (cook-panel) ga yuborish
       io.to(`kitchen_${kitchenOrder.restaurantId}`).emit("order_item_cancelled", cancelEventData);
+      io.to("kitchen").emit("order_item_cancelled", cancelEventData); // Legacy
 
       // My-orders (mijoz) uchun - faqat tegishli sessiyaga
       if (sessionId) {
