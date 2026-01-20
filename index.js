@@ -731,9 +731,9 @@ io.on("connection", async (socket) => {
       io.to(`cashier_${restaurantId}`).emit("new_order_for_cashier", order);
       io.to("cashier").emit("new_order_for_cashier", order);
 
-      // Barcha buyurtmalarni broadcast
+      // Barcha buyurtmalarni faqat shu restoranga broadcast
       const orders = await Order.find({ restaurantId });
-      socket.broadcast.emit("get_order", orders);
+      io.to(`restaurant_${restaurantId}`).emit("get_order", orders);
     } catch (error) {
       console.error("Post order error:", error);
       socket.emit("get_message", { msg: "error", error: error.message });
@@ -1271,8 +1271,8 @@ io.on("connection", async (socket) => {
       io.to(`kitchen_${kitchenOrder.restaurantId}`).emit("kitchen_orders_updated", kitchenOrders);
       io.to("kitchen").emit("kitchen_orders_updated", kitchenOrders);
 
-      // Waiter (ofitsiant) tomonga ham xabar
-      io.to(`waiter_${kitchenOrder.restaurantId}`).emit("kitchen_orders_updated", kitchenOrders);
+      // Waiter (ofitsiant) tomonga ham xabar - restoran room orqali
+      io.to(`restaurant_${kitchenOrder.restaurantId}`).emit("kitchen_orders_updated", kitchenOrders);
 
       // Kassir tomonga xabar
       io.to(`cashier_${kitchenOrder.restaurantId}`).emit("kitchen_orders_updated", kitchenOrders);
