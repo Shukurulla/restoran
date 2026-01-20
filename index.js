@@ -450,6 +450,8 @@ io.on("connection", async (socket) => {
         tableNumber,
         selectFoods,
         sessionId,
+        fromWaiter,
+        waiterId: orderWaiterId,
       } = data;
 
       // Validatsiya
@@ -626,7 +628,17 @@ io.on("connection", async (socket) => {
         });
 
         // Ofitsiyantni tayinlash
-        const assignedWaiter = await assignWaiterToOrder(restaurantId, tableId);
+        // Agar Flutter waiter app dan kelgan bo'lsa - shu waiter'ni ishlatish
+        // Aks holda stolga biriktirilgan waiter'ni topish
+        let assignedWaiter = null;
+        if (fromWaiter && orderWaiterId) {
+          // Flutter waiter app dan - order bergan waiter
+          assignedWaiter = await Staff.findById(orderWaiterId);
+          console.log(`Order from Flutter waiter app - assigned to waiter: ${assignedWaiter?.firstName} (${orderWaiterId})`);
+        } else {
+          // Client (QR scan) dan - stolga biriktirilgan waiter
+          assignedWaiter = await assignWaiterToOrder(restaurantId, tableId);
+        }
 
         // Kitchen order yaratish
         kitchenOrder = await KitchenOrder.create({
