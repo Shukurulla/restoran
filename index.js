@@ -200,6 +200,18 @@ async function assignWaiterToOrder(restaurantId, tableId) {
 // Helper function: Har bir oshpazga faqat uning category'lariga tegishli orderlarni yuborish
 async function emitFilteredKitchenOrders(io, restaurantId, kitchenOrder, allOrders, newItems, isNewOrder) {
   try {
+    console.log("=== emitFilteredKitchenOrders ===");
+    console.log("newItems:", JSON.stringify(newItems.map(i => ({ name: i.foodName, category: i.category }))));
+
+    // Category ID'larni name'larga map qilish uchun
+    const Category = require("./models/category");
+    const allCategories = await Category.find({ restaurantId });
+    const categoryIdToName = {};
+    allCategories.forEach(cat => {
+      categoryIdToName[cat._id.toString()] = cat.title;
+    });
+    console.log("Category ID to Name map:", categoryIdToName);
+
     // Restoranning barcha ishlaydigan oshpazlarini olish
     const cooks = await Staff.find({
       restaurantId,
@@ -207,12 +219,14 @@ async function emitFilteredKitchenOrders(io, restaurantId, kitchenOrder, allOrde
       status: "working",
     });
 
+    console.log("Found cooks:", cooks.map(c => ({ id: c._id, name: c.firstName, categories: c.assignedCategories })));
+
     // Har bir oshpazga alohida filtered data yuborish
     for (const cook of cooks) {
-      const cookCategories = cook.assignedCategories || [];
+      const cookCategoryIds = cook.assignedCategories || [];
 
       // Agar oshpazning categorylari yo'q bo'lsa - barcha orderlarni ko'rsatish
-      if (cookCategories.length === 0) {
+      if (cookCategoryIds.length === 0) {
         io.to(`cook_${cook._id}`).emit("new_kitchen_order", {
           order: kitchenOrder,
           allOrders: allOrders,
@@ -222,12 +236,25 @@ async function emitFilteredKitchenOrders(io, restaurantId, kitchenOrder, allOrde
         continue;
       }
 
+      // Category ID'larni name'larga o'girish
+      const cookCategoryNames = cookCategoryIds.map(id => {
+        const name = categoryIdToName[id];
+        return name ? name.toLowerCase() : id.toLowerCase();
+      });
+      console.log(`Cook ${cook.firstName} category names:`, cookCategoryNames);
+
       // Yangi itemlarni filter qilish (faqat shu oshpazning categorylari)
       const filteredNewItems = newItems.filter(item => {
-        if (!item.category) return false;
-        return cookCategories.some(cat =>
-          cat.toLowerCase() === item.category.toLowerCase()
+        console.log(`Checking item: ${item.foodName}, category: ${item.category}, cookCategoryNames: ${cookCategoryNames}`);
+        if (!item.category) {
+          console.log(`  -> SKIPPED (no category)`);
+          return false;
+        }
+        const match = cookCategoryNames.some(catName =>
+          catName === item.category.toLowerCase()
         );
+        console.log(`  -> ${match ? 'MATCHED' : 'NOT MATCHED'}`);
+        return match;
       });
 
       // Agar bu oshpazga tegishli yangi itemlar bo'lmasa - skip
@@ -239,8 +266,8 @@ async function emitFilteredKitchenOrders(io, restaurantId, kitchenOrder, allOrde
       const filteredAllOrders = allOrders.map(order => {
         const filteredItems = order.items.filter(item => {
           if (!item.category) return false;
-          return cookCategories.some(cat =>
-            cat.toLowerCase() === item.category.toLowerCase()
+          return cookCategoryNames.some(catName =>
+            catName === item.category.toLowerCase()
           );
         });
 
@@ -259,8 +286,8 @@ async function emitFilteredKitchenOrders(io, restaurantId, kitchenOrder, allOrde
         if (kitchenOrder) {
           const filteredOrderItems = kitchenOrder.items.filter(item => {
             if (!item.category) return false;
-            return cookCategories.some(cat =>
-              cat.toLowerCase() === item.category.toLowerCase()
+            return cookCategoryNames.some(catName =>
+              catName === item.category.toLowerCase()
             );
           });
 
