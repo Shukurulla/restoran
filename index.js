@@ -530,44 +530,69 @@ io.on("connection", async (socket) => {
         }
       }
 
+      // Food modelidan category olish uchun yordamchi funksiya
+      const Food = require("./models/foods");
+      const getCategoryForFood = async (foodId) => {
+        if (!foodId) return null;
+        try {
+          const food = await Food.findById(foodId).select('category');
+          return food?.category || null;
+        } catch (err) {
+          console.error(`Error getting category for food ${foodId}:`, err);
+          return null;
+        }
+      };
+
       if (useAllOrders && data.allOrders && Array.isArray(data.allOrders)) {
         // allOrders'dan guruhlash
-        data.allOrders.forEach((food) => {
+        for (const food of data.allOrders) {
           const foodId = food._id || food.id;
           if (itemsMap.has(foodId)) {
             itemsMap.get(foodId).quantity += 1;
           } else {
+            // Category yo'q bo'lsa, database'dan olish
+            let category = food.category;
+            if (!category && foodId) {
+              category = await getCategoryForFood(foodId);
+            }
             itemsMap.set(foodId, {
               foodId: foodId,
               foodName: food.foodName || food.name,
-              category: food.category || null, // Category - cook panel uchun
+              category: category, // Category - cook panel uchun
               quantity: 1,
               price: food.price || 0,
               isReady: false,
             });
           }
-        });
+        }
       } else {
         // selectFoods'dan olish (quantity bilan)
-        sourceItems.forEach((food) => {
+        for (const food of sourceItems) {
           const foodId = food._id || food.id;
           if (itemsMap.has(foodId)) {
             itemsMap.get(foodId).quantity += (food.quantity || food.count || 1);
           } else {
+            // Category yo'q bo'lsa, database'dan olish
+            let category = food.category;
+            if (!category && foodId) {
+              category = await getCategoryForFood(foodId);
+            }
             itemsMap.set(foodId, {
               foodId: foodId,
               foodName: food.foodName || food.name,
-              category: food.category || null, // Category - cook panel uchun
+              category: category, // Category - cook panel uchun
               quantity: food.quantity || food.count || 1,
               price: food.price || 0,
               isReady: false,
             });
           }
-        });
+        }
       }
 
       // Map'dan array'ga o'tkazish
       itemsMap.forEach((item) => newItems.push(item));
+
+      console.log('New items with categories:', newItems.map(i => ({ name: i.foodName, category: i.category })));
 
       // Agar mijozdan kelgan bo'lsa (fromWaiter=false), waiter tasdiqlashi kerak
       // Agar waiterdan kelgan bo'lsa (fromWaiter=true), to'g'ridan-to'g'ri kitchen/cashierga boradi
