@@ -216,9 +216,7 @@ router.put(
 
       // Cook uchun - biriktirilgan categorylar
       if (staff.role === "cook" && assignedCategories !== undefined) {
-        console.log("Setting assignedCategories:", assignedCategories);
         staff.assignedCategories = assignedCategories;
-        console.log("Staff after setting:", staff.assignedCategories);
       }
 
       // Waiter uchun - ish haqi foizi
@@ -227,7 +225,6 @@ router.put(
       }
 
       const savedStaff = await staff.save();
-      console.log("Saved staff assignedCategories:", savedStaff.assignedCategories);
 
       res.json({
         success: true,
