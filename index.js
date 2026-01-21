@@ -263,37 +263,57 @@ async function emitFilteredKitchenOrders(io, restaurantId, kitchenOrder, allOrde
       }
 
       // allOrders ni ham filter qilish - faqat shu oshpazning itemlari bor orderlar
+      // MUHIM: originalIndex ni saqlash kerak - backend to'g'ri item'ni topishi uchun
       const filteredAllOrders = allOrders.map(order => {
-        const filteredItems = order.items.filter(item => {
-          if (!item.category) return false;
-          return cookCategoryNames.some(catName =>
+        const orderObj = order.toObject ? order.toObject() : order;
+        const filteredItems = [];
+
+        // Har bir item'ni tekshirish va originalIndex ni saqlash
+        (orderObj.items || []).forEach((item, originalIndex) => {
+          if (!item.category) return;
+          const matches = cookCategoryNames.some(catName =>
             catName === item.category.toLowerCase()
           );
+          if (matches) {
+            filteredItems.push({
+              ...item,
+              originalIndex: originalIndex, // Original index'ni saqlash
+            });
+          }
         });
 
         if (filteredItems.length === 0) return null;
 
         return {
-          ...order.toObject ? order.toObject() : order,
+          ...orderObj,
           items: filteredItems,
         };
       }).filter(order => order !== null);
 
       // Agar bu oshpazga tegishli orderlar bo'lsa - yuborish
       if (filteredAllOrders.length > 0 || filteredNewItems.length > 0) {
-        // kitchenOrder ni ham filter qilish
+        // kitchenOrder ni ham filter qilish - originalIndex bilan
         let filteredKitchenOrder = null;
         if (kitchenOrder) {
-          const filteredOrderItems = kitchenOrder.items.filter(item => {
-            if (!item.category) return false;
-            return cookCategoryNames.some(catName =>
+          const kitchenOrderObj = kitchenOrder.toObject ? kitchenOrder.toObject() : kitchenOrder;
+          const filteredOrderItems = [];
+
+          (kitchenOrderObj.items || []).forEach((item, originalIndex) => {
+            if (!item.category) return;
+            const matches = cookCategoryNames.some(catName =>
               catName === item.category.toLowerCase()
             );
+            if (matches) {
+              filteredOrderItems.push({
+                ...item,
+                originalIndex: originalIndex,
+              });
+            }
           });
 
           if (filteredOrderItems.length > 0) {
             filteredKitchenOrder = {
-              ...kitchenOrder.toObject ? kitchenOrder.toObject() : kitchenOrder,
+              ...kitchenOrderObj,
               items: filteredOrderItems,
             };
           }
@@ -319,6 +339,80 @@ async function emitFilteredKitchenOrders(io, restaurantId, kitchenOrder, allOrde
       isNewOrder,
       newItems: newItems,
     });
+  }
+}
+
+// Har bir cook'ga filtrlangan kitchen_orders_updated yuborish
+async function emitFilteredKitchenOrdersUpdated(io, restaurantId, kitchenOrders) {
+  try {
+    const Category = require("./models/category");
+    const allCategories = await Category.find({ restaurantId });
+    const categoryIdToName = {};
+    allCategories.forEach(cat => {
+      categoryIdToName[cat._id.toString()] = cat.title;
+    });
+
+    // Barcha cook'larni olish
+    const cooks = await Staff.find({
+      restaurantId,
+      role: "cook",
+      status: "working",
+    });
+
+    for (const cook of cooks) {
+      const cookCategoryIds = cook.assignedCategories || [];
+
+      // Agar cook'ning categorylari yo'q bo'lsa - barcha orderlarni yuborish
+      if (cookCategoryIds.length === 0) {
+        io.to(`cook_${cook._id}`).emit("kitchen_orders_updated", kitchenOrders);
+        continue;
+      }
+
+      // Category ID'larni name'larga o'girish
+      const cookCategoryNames = cookCategoryIds.map(id => {
+        const name = categoryIdToName[id];
+        return name ? name.toLowerCase() : id.toLowerCase();
+      });
+
+      // Orderlarni filter qilish - originalIndex bilan
+      const filteredOrders = kitchenOrders.map(order => {
+        const orderObj = order.toObject ? order.toObject() : order;
+        const filteredItems = [];
+
+        (orderObj.items || []).forEach((item, originalIndex) => {
+          if (!item.category) return;
+          const matches = cookCategoryNames.some(catName =>
+            catName === item.category.toLowerCase()
+          );
+          if (matches) {
+            filteredItems.push({
+              ...item,
+              originalIndex: originalIndex,
+            });
+          }
+        });
+
+        if (filteredItems.length === 0) return null;
+
+        return {
+          ...orderObj,
+          items: filteredItems,
+        };
+      }).filter(order => order !== null);
+
+      io.to(`cook_${cook._id}`).emit("kitchen_orders_updated", filteredOrders);
+    }
+
+    // Cashier'ga ham yuborish (filter qilmasdan)
+    io.to(`cashier_${restaurantId}`).emit("kitchen_orders_updated", kitchenOrders);
+    io.to("cashier").emit("kitchen_orders_updated", kitchenOrders);
+  } catch (error) {
+    console.error("emitFilteredKitchenOrdersUpdated error:", error);
+    // Fallback
+    io.to(`kitchen_${restaurantId}`).emit("kitchen_orders_updated", kitchenOrders);
+    io.to("kitchen").emit("kitchen_orders_updated", kitchenOrders);
+    io.to(`cashier_${restaurantId}`).emit("kitchen_orders_updated", kitchenOrders);
+    io.to("cashier").emit("kitchen_orders_updated", kitchenOrders);
   }
 }
 
@@ -1051,16 +1145,8 @@ io.on("connection", async (socket) => {
         .sort({ createdAt: 1 }) // Eng eski (ko'p kutilgan) birinchi
         .populate("waiterId");
 
-      io.to(`kitchen_${order.restaurantId}`).emit(
-        "kitchen_orders_updated",
-        kitchenOrders
-      );
-      io.to("kitchen").emit("kitchen_orders_updated", kitchenOrders); // Legacy support
-      io.to(`cashier_${order.restaurantId}`).emit(
-        "kitchen_orders_updated",
-        kitchenOrders
-      );
-      io.to("cashier").emit("kitchen_orders_updated", kitchenOrders); // Legacy support
+      // Har bir cook'ga filtrlangan ma'lumot yuborish
+      await emitFilteredKitchenOrdersUpdated(io, order.restaurantId, kitchenOrders);
 
       // Waiter'ga ham xabar yuborish - faqat shu paytda tayyor bo'lgan 1 ta taom
       if (order.waiterId && item.isReady) {
