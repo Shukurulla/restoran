@@ -8,6 +8,11 @@ const kitchenOrderItemSchema = new mongoose.Schema({
     type: String,
     required: true,
   },
+  // Category - cook panel uchun filter
+  category: {
+    type: String,
+    default: null,
+  },
   quantity: {
     type: Number,
     required: true,

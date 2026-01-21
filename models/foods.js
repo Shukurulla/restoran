@@ -37,6 +37,11 @@ const foodSchema = mongoose.Schema(
       type: Boolean,
       default: true,
     },
+    // Stop list - sotuvda mavjud emas
+    inStopList: {
+      type: Boolean,
+      default: false,
+    },
     // Ortacha tayyorlash vaqti (sekundlarda)
     averageCookingTime: {
       type: Number,

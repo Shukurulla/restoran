@@ -69,7 +69,7 @@ async function sendPushNotification(fcmToken, title, body, data = {}) {
         priority: "high",
         notification: {
           sound: "default",
-          channelId: "waiter_notifications",
+          channelId: "waiter_high_priority",
           priority: "high",
         },
       },
@@ -128,7 +128,7 @@ async function sendPushNotificationToMultiple(fcmTokens, title, body, data = {})
         priority: "high",
         notification: {
           sound: "default",
-          channelId: "waiter_notifications",
+          channelId: "waiter_high_priority",
           priority: "high",
         },
       },

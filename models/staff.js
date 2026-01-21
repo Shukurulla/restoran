@@ -58,6 +58,17 @@ const staffSchema = mongoose.Schema(
         ref: "Table",
       },
     ],
+    // Cook uchun - biriktirilgan categorylar (bar, oshxona, shashlik va h.k.)
+    assignedCategories: [
+      {
+        type: String,
+      },
+    ],
+    // Waiter uchun - ish haqi foizi (default 5%)
+    salaryPercent: {
+      type: Number,
+      default: 5,
+    },
   },
   { timestamps: true }
 );

@@ -5,9 +5,11 @@ const router = express.Router();
 const cors = require("cors");
 
 // Barcha kitchen orderlarni olish (oshpaz uchun)
+// cookId parameter bilan - faqat shu cook'ga biriktirilgan categorylarni ko'rsatadi
 router.get("/kitchen-orders", cors(), async (req, res) => {
   try {
-    const { restaurantId } = req.query;
+    const { restaurantId, cookId } = req.query;
+    const Staff = require("../models/staff");
 
     const filter = {
       status: { $in: ["pending", "preparing"] },
@@ -24,9 +26,27 @@ router.get("/kitchen-orders", cors(), async (req, res) => {
       filter.restaurantId = restaurantId;
     }
 
-    const orders = await KitchenOrder.find(filter)
+    let orders = await KitchenOrder.find(filter)
       .sort({ createdAt: 1 })
       .populate("waiterId");
+
+    // Agar cookId berilgan bo'lsa, faqat shu cook'ga biriktirilgan categorylarni filter qilish
+    if (cookId) {
+      const cook = await Staff.findById(cookId);
+      if (cook && cook.assignedCategories && cook.assignedCategories.length > 0) {
+        // Har bir orderdagi itemlarni filter qilish - faqat shu cook'ga tegishli categorylar
+        orders = orders.map(order => {
+          const orderObj = order.toObject();
+          // Faqat shu cook'ga biriktirilgan category'dagi itemlarni ko'rsatish
+          orderObj.items = orderObj.items.filter(item => {
+            // Item'ning category'sini tekshirish
+            return cook.assignedCategories.includes(item.category);
+          });
+          return orderObj;
+        }).filter(order => order.items.length > 0); // Bo'sh orderlarni olib tashlash
+      }
+    }
+
     res.json({ data: orders });
   } catch (error) {
     res.status(500).json({ error: error.message });

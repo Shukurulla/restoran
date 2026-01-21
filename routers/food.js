@@ -128,4 +128,58 @@ router.post("/delete-food/:id", cors(), authenticateRestaurantAdmin, async (req,
   }
 });
 
+// ============ STOP LIST ============
+
+// Stop list - sotuvda mavjud emas taomlar
+router.get("/foods/stop-list", cors(), authenticateRestaurantAdmin, async (req, res) => {
+  try {
+    const stopListFoods = await Food.find({
+      restaurantId: req.restaurantId,
+      inStopList: true,
+    });
+    res.json({ data: stopListFoods });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Taomni stop list'ga qo'shish
+router.patch("/foods/:id/stop-list", cors(), authenticateRestaurantAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { inStopList } = req.body;
+
+    const food = await Food.findOneAndUpdate(
+      { _id: id, restaurantId: req.restaurantId },
+      { inStopList: inStopList },
+      { new: true }
+    );
+
+    if (!food) {
+      return res.status(404).json({ error: "Taom topilmadi" });
+    }
+
+    res.json({ success: true, food });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Bir nechta taomni stop list'ga qo'shish/olib tashlash
+router.patch("/foods/stop-list/bulk", cors(), authenticateRestaurantAdmin, async (req, res) => {
+  try {
+    const { foodIds, inStopList } = req.body;
+
+    await Food.updateMany(
+      { _id: { $in: foodIds }, restaurantId: req.restaurantId },
+      { inStopList: inStopList }
+    );
+
+    const foods = await Food.find({ restaurantId: req.restaurantId });
+    res.json({ success: true, data: foods });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 module.exports = router;

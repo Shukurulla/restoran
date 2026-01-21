@@ -540,6 +540,7 @@ io.on("connection", async (socket) => {
             itemsMap.set(foodId, {
               foodId: foodId,
               foodName: food.foodName || food.name,
+              category: food.category || null, // Category - cook panel uchun
               quantity: 1,
               price: food.price || 0,
               isReady: false,
@@ -556,6 +557,7 @@ io.on("connection", async (socket) => {
             itemsMap.set(foodId, {
               foodId: foodId,
               foodName: food.foodName || food.name,
+              category: food.category || null, // Category - cook panel uchun
               quantity: food.quantity || food.count || 1,
               price: food.price || 0,
               isReady: false,
@@ -682,16 +684,17 @@ io.on("connection", async (socket) => {
         });
 
         // Ofitsiyantni tayinlash
-        // Agar Flutter waiter app dan kelgan bo'lsa - shu waiter'ni ishlatish
-        // Aks holda stolga biriktirilgan waiter'ni topish
-        let assignedWaiter = null;
-        if (fromWaiter && orderWaiterId) {
-          // Flutter waiter app dan - order bergan waiter
+        // MUHIM: Order DOIM stolga biriktirilgan waiterga borishi kerak
+        // Hatto boshqa waiter order bersa ham, stolga biriktirilgan waiterga boradi
+        let assignedWaiter = await assignWaiterToOrder(restaurantId, tableId);
+
+        // Agar stolga biriktirilgan waiter topilmasa va waiter app'dan kelgan bo'lsa
+        // O'sha waiterni ishlatish (fallback)
+        if (!assignedWaiter && fromWaiter && orderWaiterId) {
           assignedWaiter = await Staff.findById(orderWaiterId);
-          console.log(`Order from Flutter waiter app - assigned to waiter: ${assignedWaiter?.firstName} (${orderWaiterId})`);
-        } else {
-          // Client (QR scan) dan - stolga biriktirilgan waiter
-          assignedWaiter = await assignWaiterToOrder(restaurantId, tableId);
+          console.log(`No table waiter found, using order creator: ${assignedWaiter?.firstName} (${orderWaiterId})`);
+        } else if (assignedWaiter) {
+          console.log(`Order assigned to table's waiter: ${assignedWaiter?.firstName}`);
         }
 
         // Kitchen order yaratish
