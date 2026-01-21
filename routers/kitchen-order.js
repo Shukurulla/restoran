@@ -33,17 +33,28 @@ router.get("/kitchen-orders", cors(), async (req, res) => {
     // Agar cookId berilgan bo'lsa, faqat shu cook'ga biriktirilgan categorylarni filter qilish
     if (cookId) {
       const cook = await Staff.findById(cookId);
+      console.log(`Cook ${cookId} assignedCategories:`, cook?.assignedCategories);
+
       if (cook && cook.assignedCategories && cook.assignedCategories.length > 0) {
         // Har bir orderdagi itemlarni filter qilish - faqat shu cook'ga tegishli categorylar
         orders = orders.map(order => {
           const orderObj = order.toObject();
+
+          // Debug: har bir item'ning category'sini log qilish
+          orderObj.items.forEach(item => {
+            console.log(`Item: ${item.foodName}, category: "${item.category}", type: ${typeof item.category}`);
+          });
+
           // Faqat shu cook'ga biriktirilgan category'dagi itemlarni ko'rsatish
           orderObj.items = orderObj.items.filter(item => {
-            // Item'ning category'sini tekshirish
-            return cook.assignedCategories.includes(item.category);
+            const isMatch = cook.assignedCategories.includes(item.category);
+            console.log(`Checking item "${item.foodName}" category "${item.category}" against assignedCategories - match: ${isMatch}`);
+            return isMatch;
           });
           return orderObj;
         }).filter(order => order.items.length > 0); // Bo'sh orderlarni olib tashlash
+
+        console.log(`After filtering: ${orders.length} orders remain`);
       }
     }
 
