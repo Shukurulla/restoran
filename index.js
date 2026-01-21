@@ -306,7 +306,8 @@ async function emitFilteredKitchenOrders(io, restaurantId, kitchenOrder, allOrde
           newItems: filteredNewItems,
         });
 
-        console.log(`Sent filtered order to cook ${cook.firstName} (${cook._id}): ${filteredNewItems.length} items`);
+        console.log(`Sent filtered order to cook ${cook.firstName} (${cook._id}): ${filteredNewItems.length} new items, ${filteredAllOrders.length} total orders`);
+        console.log(`filteredAllOrders:`, JSON.stringify(filteredAllOrders.map(o => ({ id: o._id, table: o.tableName, items: o.items.map(i => i.foodName) }))));
       }
     }
   } catch (error) {
