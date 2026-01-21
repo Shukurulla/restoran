@@ -197,6 +197,103 @@ async function assignWaiterToOrder(restaurantId, tableId) {
   return assignWaiterToTable(restaurantId, tableId);
 }
 
+// Helper function: Har bir oshpazga faqat uning category'lariga tegishli orderlarni yuborish
+async function emitFilteredKitchenOrders(io, restaurantId, kitchenOrder, allOrders, newItems, isNewOrder) {
+  try {
+    // Restoranning barcha ishlaydigan oshpazlarini olish
+    const cooks = await Staff.find({
+      restaurantId,
+      role: "cook",
+      status: "working",
+    });
+
+    // Har bir oshpazga alohida filtered data yuborish
+    for (const cook of cooks) {
+      const cookCategories = cook.assignedCategories || [];
+
+      // Agar oshpazning categorylari yo'q bo'lsa - barcha orderlarni ko'rsatish
+      if (cookCategories.length === 0) {
+        io.to(`cook_${cook._id}`).emit("new_kitchen_order", {
+          order: kitchenOrder,
+          allOrders: allOrders,
+          isNewOrder,
+          newItems: newItems,
+        });
+        continue;
+      }
+
+      // Yangi itemlarni filter qilish (faqat shu oshpazning categorylari)
+      const filteredNewItems = newItems.filter(item => {
+        if (!item.category) return false;
+        return cookCategories.some(cat =>
+          cat.toLowerCase() === item.category.toLowerCase()
+        );
+      });
+
+      // Agar bu oshpazga tegishli yangi itemlar bo'lmasa - skip
+      if (filteredNewItems.length === 0 && isNewOrder) {
+        continue;
+      }
+
+      // allOrders ni ham filter qilish - faqat shu oshpazning itemlari bor orderlar
+      const filteredAllOrders = allOrders.map(order => {
+        const filteredItems = order.items.filter(item => {
+          if (!item.category) return false;
+          return cookCategories.some(cat =>
+            cat.toLowerCase() === item.category.toLowerCase()
+          );
+        });
+
+        if (filteredItems.length === 0) return null;
+
+        return {
+          ...order.toObject ? order.toObject() : order,
+          items: filteredItems,
+        };
+      }).filter(order => order !== null);
+
+      // Agar bu oshpazga tegishli orderlar bo'lsa - yuborish
+      if (filteredAllOrders.length > 0 || filteredNewItems.length > 0) {
+        // kitchenOrder ni ham filter qilish
+        let filteredKitchenOrder = null;
+        if (kitchenOrder) {
+          const filteredOrderItems = kitchenOrder.items.filter(item => {
+            if (!item.category) return false;
+            return cookCategories.some(cat =>
+              cat.toLowerCase() === item.category.toLowerCase()
+            );
+          });
+
+          if (filteredOrderItems.length > 0) {
+            filteredKitchenOrder = {
+              ...kitchenOrder.toObject ? kitchenOrder.toObject() : kitchenOrder,
+              items: filteredOrderItems,
+            };
+          }
+        }
+
+        io.to(`cook_${cook._id}`).emit("new_kitchen_order", {
+          order: filteredKitchenOrder,
+          allOrders: filteredAllOrders,
+          isNewOrder,
+          newItems: filteredNewItems,
+        });
+
+        console.log(`Sent filtered order to cook ${cook.firstName} (${cook._id}): ${filteredNewItems.length} items`);
+      }
+    }
+  } catch (error) {
+    console.error("emitFilteredKitchenOrders error:", error);
+    // Fallback - eski usulda yuborish
+    io.to(`kitchen_${restaurantId}`).emit("new_kitchen_order", {
+      order: kitchenOrder,
+      allOrders: allOrders,
+      isNewOrder,
+      newItems: newItems,
+    });
+  }
+}
+
 // Socket.io
 io.on("connection", async (socket) => {
   console.log(`User connected: ${socket.id}`);
@@ -266,7 +363,8 @@ io.on("connection", async (socket) => {
         );
       } else if (role === "cook") {
         socket.join(`kitchen_${restaurantId}`);
-        console.log(`Cook connected to restaurant ${restaurantId}`);
+        socket.join(`cook_${staffId}`); // Personal cook room for filtered orders
+        console.log(`Cook ${staffId} connected to restaurant ${restaurantId}`);
       } else if (role === "cashier") {
         socket.join(`cashier_${restaurantId}`);
         console.log(`Cashier connected to restaurant ${restaurantId}`);
@@ -339,9 +437,13 @@ io.on("connection", async (socket) => {
   socket.on("cook_connect", (data) => {
     // data object yoki string bo'lishi mumkin
     const restaurantId = typeof data === 'object' ? data.restaurantId : data;
+    const cookId = typeof data === 'object' ? data.cookId : null;
     socket.join(`kitchen_${restaurantId || "default"}`);
     socket.join("kitchen"); // Legacy support - eski clientlar uchun
-    console.log(`Cook connected to kitchen_${restaurantId}`);
+    if (cookId) {
+      socket.join(`cook_${cookId}`); // Personal cook room for filtered orders
+    }
+    console.log(`Cook ${cookId || 'unknown'} connected to kitchen_${restaurantId}`);
   });
 
   socket.on("cashier_connect", async (data) => {
@@ -839,20 +941,8 @@ io.on("connection", async (socket) => {
         .sort({ createdAt: 1 })
         .populate("waiterId");
 
-      io.to(`kitchen_${restaurantId}`).emit("new_kitchen_order", {
-        order: kitchenOrder,
-        allOrders: kitchenOrders,
-        isNewOrder,
-        newItems: newItems, // Faqat yangi qo'shilgan itemlar - print uchun
-      });
-
-      // Legacy support - global kitchen room (ikki marta print oldini olish uchun deduplication client'da)
-      io.to("kitchen").emit("new_kitchen_order", {
-        order: kitchenOrder,
-        allOrders: kitchenOrders,
-        isNewOrder,
-        newItems: newItems,
-      });
+      // Har bir oshpazga faqat uning category'lariga tegishli orderlarni yuborish
+      await emitFilteredKitchenOrders(io, restaurantId, kitchenOrder, kitchenOrders, newItems, isNewOrder);
 
       // Kassaga xabar
       io.to(`cashier_${restaurantId}`).emit("new_kitchen_order", {
@@ -1090,19 +1180,8 @@ io.on("connection", async (socket) => {
         .sort({ createdAt: 1 })
         .populate("waiterId");
 
-      io.to(`kitchen_${restaurantId}`).emit("new_kitchen_order", {
-        order: kitchenOrder,
-        allOrders: kitchenOrders,
-        isNewOrder: true,
-        newItems: kitchenOrder.items,
-      });
-
-      io.to("kitchen").emit("new_kitchen_order", {
-        order: kitchenOrder,
-        allOrders: kitchenOrders,
-        isNewOrder: true,
-        newItems: kitchenOrder.items,
-      });
+      // Har bir oshpazga faqat uning category'lariga tegishli orderlarni yuborish
+      await emitFilteredKitchenOrders(io, restaurantId, kitchenOrder, kitchenOrders, kitchenOrder.items, true);
 
       // Kassaga xabar
       const order = await Order.findById(kitchenOrder.orderId);
