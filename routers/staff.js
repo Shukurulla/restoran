@@ -58,6 +58,8 @@ router.post("/staff/login", async (req, res) => {
         role: staff.role,
         restaurantId: restaurant._id,
         isWorking: staff.isWorking || false,
+        assignedCategories: staff.assignedCategories || [], // Cook uchun biriktirilgan categorylar
+        salaryPercent: staff.salaryPercent, // Waiter uchun ish haqi foizi
       },
       restaurant: {
         id: restaurant._id,
