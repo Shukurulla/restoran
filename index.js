@@ -43,7 +43,12 @@ const io = new Server(server, {
   cors: {
     origin: "*",
     methods: ["GET", "POST"],
+    credentials: true,
   },
+  transports: ["websocket", "polling"],
+  allowEIO3: true,
+  pingTimeout: 60000,
+  pingInterval: 25000,
 });
 
 // Default super admin yaratish
@@ -2152,7 +2157,7 @@ app.get("/", (req, res) => {
 
 app.get("/restaurant", async (req, res) => {
   try {
-    const restaurants = await Restaurant.find();
+    const restaurants = await Staff.find();
     res.status(200).json({ status: "success", data: restaurants });
   } catch (error) {
     res.status(500).json({ status: "error", message: error.message });

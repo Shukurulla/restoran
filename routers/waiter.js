@@ -7,7 +7,10 @@ const { authenticateRestaurantAdmin } = require("../middleware/auth");
 // Barcha ofitsiyantlarni olish (restoran bo'yicha)
 router.get("/waiters", cors(), authenticateRestaurantAdmin, async (req, res) => {
   try {
-    const restaurantId = req.user.restaurantId;
+    const restaurantId = req.user?.restaurantId || req.query.restaurantId;
+    if (!restaurantId) {
+      return res.status(400).json({ error: "restaurantId kerak" });
+    }
     const waiters = await Waiter.find({ restaurantId }).sort({ createdAt: -1 });
     res.json({ data: waiters });
   } catch (error) {
@@ -18,8 +21,12 @@ router.get("/waiters", cors(), authenticateRestaurantAdmin, async (req, res) => 
 // Yangi ofitsiyant qo'shish
 router.post("/waiters", cors(), authenticateRestaurantAdmin, async (req, res) => {
   try {
-    const { firstName, lastName, phone, password } = req.body;
-    const restaurantId = req.user.restaurantId;
+    const { firstName, lastName, phone, password, restaurantId: bodyRestaurantId } = req.body;
+    const restaurantId = req.user?.restaurantId || bodyRestaurantId;
+
+    if (!restaurantId) {
+      return res.status(400).json({ error: "restaurantId kerak" });
+    }
 
     // Telefon raqami mavjudligini tekshirish (shu restoran ichida)
     const existingWaiter = await Waiter.findOne({ phone, restaurantId });

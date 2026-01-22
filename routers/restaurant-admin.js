@@ -157,10 +157,11 @@ router.post(
       res.json({
         success: true,
         staff: {
-          id: staff._id,
+          _id: staff._id,
           firstName: staff.firstName,
           lastName: staff.lastName,
           phone: staff.phone,
+          password: staff.password,
           role: staff.role,
           status: staff.status,
           assignedCategories: staff.assignedCategories,
@@ -229,10 +230,11 @@ router.put(
       res.json({
         success: true,
         staff: {
-          id: savedStaff._id,
+          _id: savedStaff._id,
           firstName: savedStaff.firstName,
           lastName: savedStaff.lastName,
           phone: savedStaff.phone,
+          password: savedStaff.password,
           role: savedStaff.role,
           status: savedStaff.status,
           assignedCategories: savedStaff.assignedCategories,
@@ -279,10 +281,11 @@ router.patch(
       res.json({
         success: true,
         staff: {
-          id: staff._id,
+          _id: staff._id,
           firstName: staff.firstName,
           lastName: staff.lastName,
           phone: staff.phone,
+          password: staff.password,
           role: staff.role,
           status: staff.status,
         },
