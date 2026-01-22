@@ -2,11 +2,13 @@ const express = require("express");
 const Waiter = require("../models/waiter");
 const router = express.Router();
 const cors = require("cors");
+const { authenticateRestaurantAdmin } = require("../middleware/auth");
 
-// Barcha ofitsiyantlarni olish
-router.get("/waiters", cors(), async (req, res) => {
+// Barcha ofitsiyantlarni olish (restoran bo'yicha)
+router.get("/waiters", cors(), authenticateRestaurantAdmin, async (req, res) => {
   try {
-    const waiters = await Waiter.find().sort({ createdAt: -1 });
+    const restaurantId = req.user.restaurantId;
+    const waiters = await Waiter.find({ restaurantId }).sort({ createdAt: -1 });
     res.json({ data: waiters });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -14,12 +16,13 @@ router.get("/waiters", cors(), async (req, res) => {
 });
 
 // Yangi ofitsiyant qo'shish
-router.post("/waiters", cors(), async (req, res) => {
+router.post("/waiters", cors(), authenticateRestaurantAdmin, async (req, res) => {
   try {
     const { firstName, lastName, phone, password } = req.body;
+    const restaurantId = req.user.restaurantId;
 
-    // Telefon raqami mavjudligini tekshirish
-    const existingWaiter = await Waiter.findOne({ phone });
+    // Telefon raqami mavjudligini tekshirish (shu restoran ichida)
+    const existingWaiter = await Waiter.findOne({ phone, restaurantId });
     if (existingWaiter) {
       return res.status(400).json({ error: "Bu telefon raqam allaqachon mavjud" });
     }
@@ -28,10 +31,11 @@ router.post("/waiters", cors(), async (req, res) => {
       firstName,
       lastName,
       phone,
-      password, // Hash qilinmaydi - admin ko'ra olishi kerak
+      password,
+      restaurantId,
     });
 
-    const waiters = await Waiter.find().sort({ createdAt: -1 });
+    const waiters = await Waiter.find({ restaurantId }).sort({ createdAt: -1 });
     res.json({ data: waiters });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -39,15 +43,17 @@ router.post("/waiters", cors(), async (req, res) => {
 });
 
 // Ofitsiyantni yangilash
-router.put("/waiters/:id", cors(), async (req, res) => {
+router.put("/waiters/:id", cors(), authenticateRestaurantAdmin, async (req, res) => {
   try {
     const { id } = req.params;
     const { firstName, lastName, phone, password } = req.body;
+    const restaurantId = req.user.restaurantId;
 
     // Agar telefon raqam o'zgartirilsa, unikal ekanligini tekshirish
     if (phone) {
       const existingWaiter = await Waiter.findOne({
         phone,
+        restaurantId,
         _id: { $ne: id }
       });
       if (existingWaiter) {
@@ -62,7 +68,7 @@ router.put("/waiters/:id", cors(), async (req, res) => {
       password,
     });
 
-    const waiters = await Waiter.find().sort({ createdAt: -1 });
+    const waiters = await Waiter.find({ restaurantId }).sort({ createdAt: -1 });
     res.json({ data: waiters });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -70,11 +76,12 @@ router.put("/waiters/:id", cors(), async (req, res) => {
 });
 
 // Ofitsiyantni o'chirish
-router.delete("/waiters/:id", cors(), async (req, res) => {
+router.delete("/waiters/:id", cors(), authenticateRestaurantAdmin, async (req, res) => {
   try {
     const { id } = req.params;
+    const restaurantId = req.user.restaurantId;
     await Waiter.findByIdAndRemove(id);
-    const waiters = await Waiter.find().sort({ createdAt: -1 });
+    const waiters = await Waiter.find({ restaurantId }).sort({ createdAt: -1 });
     res.json({ data: waiters });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -82,10 +89,11 @@ router.delete("/waiters/:id", cors(), async (req, res) => {
 });
 
 // Ofitsiyant statusini o'zgartirish (active/inactive)
-router.patch("/waiters/:id/toggle-status", cors(), async (req, res) => {
+router.patch("/waiters/:id/toggle-status", cors(), authenticateRestaurantAdmin, async (req, res) => {
   try {
     const { id } = req.params;
-    const waiter = await Waiter.findById(id);
+    const restaurantId = req.user.restaurantId;
+    const waiter = await Waiter.findOne({ _id: id, restaurantId });
 
     if (!waiter) {
       return res.status(404).json({ error: "Ofitsiyant topilmadi" });
@@ -94,7 +102,7 @@ router.patch("/waiters/:id/toggle-status", cors(), async (req, res) => {
     waiter.isActive = !waiter.isActive;
     await waiter.save();
 
-    const waiters = await Waiter.find().sort({ createdAt: -1 });
+    const waiters = await Waiter.find({ restaurantId }).sort({ createdAt: -1 });
     res.json({ data: waiters });
   } catch (error) {
     res.status(500).json({ error: error.message });
