@@ -19,7 +19,10 @@ const Food = require("./models/foods");
 const WaiterNotification = require("./models/waiter-notification");
 
 // Firebase Service
-const { initializeFirebase, sendPushNotification } = require("./services/firebase.service");
+const {
+  initializeFirebase,
+  sendPushNotification,
+} = require("./services/firebase.service");
 
 require("dotenv").config();
 
@@ -32,7 +35,7 @@ app.use(
     origin: "*",
     optionsSuccessStatus: 200,
     credentials: true,
-  })
+  }),
 );
 
 const server = http.createServer(app);
@@ -47,7 +50,10 @@ const io = new Server(server, {
 const createDefaultSuperAdmin = require("./seeds/super-admin.seed");
 
 // Demo restoran yaratish va reset
-const { createDemoRestaurant, resetDemoData } = require("./seeds/demo-restaurant.seed");
+const {
+  createDemoRestaurant,
+  resetDemoData,
+} = require("./seeds/demo-restaurant.seed");
 
 // MongoDB ulanish
 mongoose
@@ -59,20 +65,6 @@ mongoose
     console.log("Database connected");
     // Default super admin yaratish
     await createDefaultSuperAdmin();
-
-    // Demo restoran yaratish (agar yo'q bo'lsa)
-    try {
-      await createDemoRestaurant();
-      console.log("Demo restoran tayyor!");
-
-      // Har 1 soatda demo ma'lumotlarni reset qilish
-      setInterval(async () => {
-        await resetDemoData();
-      }, 60 * 60 * 1000); // 1 soat = 60 daqiqa * 60 sekund * 1000 millisekund
-
-    } catch (error) {
-      console.error("Demo restoran yaratishda xato:", error);
-    }
   })
   .catch((err) => {
     console.error("Database connection error:", err);
@@ -96,13 +88,17 @@ async function assignWaiterToTable(restaurantId, tableId) {
       if (assignedWaiter && assignedWaiter.status === "working") {
         // Waiter ishda (keldi) mi tekshirish
         if (assignedWaiter.isWorking) {
-          console.log(`Order assigned to table's waiter: ${assignedWaiter.firstName} (working)`);
+          console.log(
+            `Order assigned to table's waiter: ${assignedWaiter.firstName} (working)`,
+          );
           table.status = "occupied";
           await table.save();
           return assignedWaiter;
         } else {
           // Waiter ishda emas (ketdi) - boshqa ishdagi waiterni topish
-          console.log(`Table's waiter ${assignedWaiter.firstName} is not working, finding fallback...`);
+          console.log(
+            `Table's waiter ${assignedWaiter.firstName} is not working, finding fallback...`,
+          );
         }
       }
     }
@@ -143,13 +139,15 @@ async function assignWaiterToTable(restaurantId, tableId) {
             status: { $in: ["pending", "preparing", "ready"] },
           });
           return { waiter, activeOrders };
-        })
+        }),
       );
 
       waiterWorkloads.sort((a, b) => a.activeOrders - b.activeOrders);
       const selectedWaiter = waiterWorkloads[0].waiter;
 
-      console.log(`Fallback (no one working): Selected ${selectedWaiter.firstName} with least orders`);
+      console.log(
+        `Fallback (no one working): Selected ${selectedWaiter.firstName} with least orders`,
+      );
 
       if (table) {
         table.status = "occupied";
@@ -172,13 +170,15 @@ async function assignWaiterToTable(restaurantId, tableId) {
           status: { $in: ["pending", "preparing", "ready"] },
         });
         return { waiter, activeOrders };
-      })
+      }),
     );
 
     waiterWorkloads.sort((a, b) => a.activeOrders - b.activeOrders);
     const selectedWaiter = waiterWorkloads[0].waiter;
 
-    console.log(`Fallback (waiter not working): Selected ${selectedWaiter.firstName} with least orders`);
+    console.log(
+      `Fallback (waiter not working): Selected ${selectedWaiter.firstName} with least orders`,
+    );
 
     if (table) {
       table.status = "occupied";
@@ -198,16 +198,28 @@ async function assignWaiterToOrder(restaurantId, tableId) {
 }
 
 // Helper function: Har bir oshpazga faqat uning category'lariga tegishli orderlarni yuborish
-async function emitFilteredKitchenOrders(io, restaurantId, kitchenOrder, allOrders, newItems, isNewOrder) {
+async function emitFilteredKitchenOrders(
+  io,
+  restaurantId,
+  kitchenOrder,
+  allOrders,
+  newItems,
+  isNewOrder,
+) {
   try {
     console.log("=== emitFilteredKitchenOrders ===");
-    console.log("newItems:", JSON.stringify(newItems.map(i => ({ name: i.foodName, category: i.category }))));
+    console.log(
+      "newItems:",
+      JSON.stringify(
+        newItems.map((i) => ({ name: i.foodName, category: i.category })),
+      ),
+    );
 
     // Category ID'larni name'larga map qilish uchun
     const Category = require("./models/category");
     const allCategories = await Category.find({ restaurantId });
     const categoryIdToName = {};
-    allCategories.forEach(cat => {
+    allCategories.forEach((cat) => {
       categoryIdToName[cat._id.toString()] = cat.title;
     });
     console.log("Category ID to Name map:", categoryIdToName);
@@ -219,7 +231,14 @@ async function emitFilteredKitchenOrders(io, restaurantId, kitchenOrder, allOrde
       status: "working",
     });
 
-    console.log("Found cooks:", cooks.map(c => ({ id: c._id, name: c.firstName, categories: c.assignedCategories })));
+    console.log(
+      "Found cooks:",
+      cooks.map((c) => ({
+        id: c._id,
+        name: c.firstName,
+        categories: c.assignedCategories,
+      })),
+    );
 
     // Har bir oshpazga alohida filtered data yuborish
     for (const cook of cooks) {
@@ -237,23 +256,25 @@ async function emitFilteredKitchenOrders(io, restaurantId, kitchenOrder, allOrde
       }
 
       // Category ID'larni name'larga o'girish
-      const cookCategoryNames = cookCategoryIds.map(id => {
+      const cookCategoryNames = cookCategoryIds.map((id) => {
         const name = categoryIdToName[id];
         return name ? name.toLowerCase() : id.toLowerCase();
       });
       console.log(`Cook ${cook.firstName} category names:`, cookCategoryNames);
 
       // Yangi itemlarni filter qilish (faqat shu oshpazning categorylari)
-      const filteredNewItems = newItems.filter(item => {
-        console.log(`Checking item: ${item.foodName}, category: ${item.category}, cookCategoryNames: ${cookCategoryNames}`);
+      const filteredNewItems = newItems.filter((item) => {
+        console.log(
+          `Checking item: ${item.foodName}, category: ${item.category}, cookCategoryNames: ${cookCategoryNames}`,
+        );
         if (!item.category) {
           console.log(`  -> SKIPPED (no category)`);
           return false;
         }
-        const match = cookCategoryNames.some(catName =>
-          catName === item.category.toLowerCase()
+        const match = cookCategoryNames.some(
+          (catName) => catName === item.category.toLowerCase(),
         );
-        console.log(`  -> ${match ? 'MATCHED' : 'NOT MATCHED'}`);
+        console.log(`  -> ${match ? "MATCHED" : "NOT MATCHED"}`);
         return match;
       });
 
@@ -264,44 +285,48 @@ async function emitFilteredKitchenOrders(io, restaurantId, kitchenOrder, allOrde
 
       // allOrders ni ham filter qilish - faqat shu oshpazning itemlari bor orderlar
       // MUHIM: originalIndex ni saqlash kerak - backend to'g'ri item'ni topishi uchun
-      const filteredAllOrders = allOrders.map(order => {
-        const orderObj = order.toObject ? order.toObject() : order;
-        const filteredItems = [];
+      const filteredAllOrders = allOrders
+        .map((order) => {
+          const orderObj = order.toObject ? order.toObject() : order;
+          const filteredItems = [];
 
-        // Har bir item'ni tekshirish va originalIndex ni saqlash
-        (orderObj.items || []).forEach((item, originalIndex) => {
-          if (!item.category) return;
-          const matches = cookCategoryNames.some(catName =>
-            catName === item.category.toLowerCase()
-          );
-          if (matches) {
-            filteredItems.push({
-              ...item,
-              originalIndex: originalIndex, // Original index'ni saqlash
-            });
-          }
-        });
+          // Har bir item'ni tekshirish va originalIndex ni saqlash
+          (orderObj.items || []).forEach((item, originalIndex) => {
+            if (!item.category) return;
+            const matches = cookCategoryNames.some(
+              (catName) => catName === item.category.toLowerCase(),
+            );
+            if (matches) {
+              filteredItems.push({
+                ...item,
+                originalIndex: originalIndex, // Original index'ni saqlash
+              });
+            }
+          });
 
-        if (filteredItems.length === 0) return null;
+          if (filteredItems.length === 0) return null;
 
-        return {
-          ...orderObj,
-          items: filteredItems,
-        };
-      }).filter(order => order !== null);
+          return {
+            ...orderObj,
+            items: filteredItems,
+          };
+        })
+        .filter((order) => order !== null);
 
       // Agar bu oshpazga tegishli orderlar bo'lsa - yuborish
       if (filteredAllOrders.length > 0 || filteredNewItems.length > 0) {
         // kitchenOrder ni ham filter qilish - originalIndex bilan
         let filteredKitchenOrder = null;
         if (kitchenOrder) {
-          const kitchenOrderObj = kitchenOrder.toObject ? kitchenOrder.toObject() : kitchenOrder;
+          const kitchenOrderObj = kitchenOrder.toObject
+            ? kitchenOrder.toObject()
+            : kitchenOrder;
           const filteredOrderItems = [];
 
           (kitchenOrderObj.items || []).forEach((item, originalIndex) => {
             if (!item.category) return;
-            const matches = cookCategoryNames.some(catName =>
-              catName === item.category.toLowerCase()
+            const matches = cookCategoryNames.some(
+              (catName) => catName === item.category.toLowerCase(),
             );
             if (matches) {
               filteredOrderItems.push({
@@ -326,8 +351,19 @@ async function emitFilteredKitchenOrders(io, restaurantId, kitchenOrder, allOrde
           newItems: filteredNewItems,
         });
 
-        console.log(`Sent filtered order to cook ${cook.firstName} (${cook._id}): ${filteredNewItems.length} new items, ${filteredAllOrders.length} total orders`);
-        console.log(`filteredAllOrders:`, JSON.stringify(filteredAllOrders.map(o => ({ id: o._id, table: o.tableName, items: o.items.map(i => i.foodName) }))));
+        console.log(
+          `Sent filtered order to cook ${cook.firstName} (${cook._id}): ${filteredNewItems.length} new items, ${filteredAllOrders.length} total orders`,
+        );
+        console.log(
+          `filteredAllOrders:`,
+          JSON.stringify(
+            filteredAllOrders.map((o) => ({
+              id: o._id,
+              table: o.tableName,
+              items: o.items.map((i) => i.foodName),
+            })),
+          ),
+        );
       }
     }
   } catch (error) {
@@ -343,12 +379,16 @@ async function emitFilteredKitchenOrders(io, restaurantId, kitchenOrder, allOrde
 }
 
 // Har bir cook'ga filtrlangan kitchen_orders_updated yuborish
-async function emitFilteredKitchenOrdersUpdated(io, restaurantId, kitchenOrders) {
+async function emitFilteredKitchenOrdersUpdated(
+  io,
+  restaurantId,
+  kitchenOrders,
+) {
   try {
     const Category = require("./models/category");
     const allCategories = await Category.find({ restaurantId });
     const categoryIdToName = {};
-    allCategories.forEach(cat => {
+    allCategories.forEach((cat) => {
       categoryIdToName[cat._id.toString()] = cat.title;
     });
 
@@ -369,49 +409,60 @@ async function emitFilteredKitchenOrdersUpdated(io, restaurantId, kitchenOrders)
       }
 
       // Category ID'larni name'larga o'girish
-      const cookCategoryNames = cookCategoryIds.map(id => {
+      const cookCategoryNames = cookCategoryIds.map((id) => {
         const name = categoryIdToName[id];
         return name ? name.toLowerCase() : id.toLowerCase();
       });
 
       // Orderlarni filter qilish - originalIndex bilan
-      const filteredOrders = kitchenOrders.map(order => {
-        const orderObj = order.toObject ? order.toObject() : order;
-        const filteredItems = [];
+      const filteredOrders = kitchenOrders
+        .map((order) => {
+          const orderObj = order.toObject ? order.toObject() : order;
+          const filteredItems = [];
 
-        (orderObj.items || []).forEach((item, originalIndex) => {
-          if (!item.category) return;
-          const matches = cookCategoryNames.some(catName =>
-            catName === item.category.toLowerCase()
-          );
-          if (matches) {
-            filteredItems.push({
-              ...item,
-              originalIndex: originalIndex,
-            });
-          }
-        });
+          (orderObj.items || []).forEach((item, originalIndex) => {
+            if (!item.category) return;
+            const matches = cookCategoryNames.some(
+              (catName) => catName === item.category.toLowerCase(),
+            );
+            if (matches) {
+              filteredItems.push({
+                ...item,
+                originalIndex: originalIndex,
+              });
+            }
+          });
 
-        if (filteredItems.length === 0) return null;
+          if (filteredItems.length === 0) return null;
 
-        return {
-          ...orderObj,
-          items: filteredItems,
-        };
-      }).filter(order => order !== null);
+          return {
+            ...orderObj,
+            items: filteredItems,
+          };
+        })
+        .filter((order) => order !== null);
 
       io.to(`cook_${cook._id}`).emit("kitchen_orders_updated", filteredOrders);
     }
 
     // Cashier'ga ham yuborish (filter qilmasdan)
-    io.to(`cashier_${restaurantId}`).emit("kitchen_orders_updated", kitchenOrders);
+    io.to(`cashier_${restaurantId}`).emit(
+      "kitchen_orders_updated",
+      kitchenOrders,
+    );
     io.to("cashier").emit("kitchen_orders_updated", kitchenOrders);
   } catch (error) {
     console.error("emitFilteredKitchenOrdersUpdated error:", error);
     // Fallback
-    io.to(`kitchen_${restaurantId}`).emit("kitchen_orders_updated", kitchenOrders);
+    io.to(`kitchen_${restaurantId}`).emit(
+      "kitchen_orders_updated",
+      kitchenOrders,
+    );
     io.to("kitchen").emit("kitchen_orders_updated", kitchenOrders);
-    io.to(`cashier_${restaurantId}`).emit("kitchen_orders_updated", kitchenOrders);
+    io.to(`cashier_${restaurantId}`).emit(
+      "kitchen_orders_updated",
+      kitchenOrders,
+    );
     io.to("cashier").emit("kitchen_orders_updated", kitchenOrders);
   }
 }
@@ -425,17 +476,21 @@ io.on("connection", async (socket) => {
   const queryRestaurantId = socket.handshake.query?.restaurantId;
 
   if (queryStaffId && queryRestaurantId) {
-    console.log(`Auto-joining waiter from query: staffId=${queryStaffId}, restaurantId=${queryRestaurantId}`);
+    console.log(
+      `Auto-joining waiter from query: staffId=${queryStaffId}, restaurantId=${queryRestaurantId}`,
+    );
     try {
       const waiter = await Staff.findByIdAndUpdate(
         queryStaffId,
         { socketId: socket.id, isOnline: true },
-        { new: true }
+        { new: true },
       );
       if (waiter) {
         socket.join(`waiter_${queryStaffId}`);
         socket.join(`restaurant_${queryRestaurantId}`);
-        console.log(`Waiter ${queryStaffId} auto-joined rooms from query params`);
+        console.log(
+          `Waiter ${queryStaffId} auto-joined rooms from query params`,
+        );
 
         // Waiter'ga ulanish tasdiqlangan deb xabar yuborish
         socket.emit("connection_established", {
@@ -445,7 +500,9 @@ io.on("connection", async (socket) => {
           restaurantId: queryRestaurantId,
           message: "Serverga muvaffaqiyatli ulandi!",
         });
-        console.log(`Connection established event sent to waiter ${queryStaffId}`);
+        console.log(
+          `Connection established event sent to waiter ${queryStaffId}`,
+        );
 
         // Push notification yuborish (app ochiq bo'lsa ham test uchun)
         if (waiter.fcmToken) {
@@ -453,7 +510,7 @@ io.on("connection", async (socket) => {
             waiter.fcmToken,
             "Serverga ulandi!",
             `${waiter.firstName}, siz serverga muvaffaqiyatli ulandingiz!`,
-            { type: "connection_established", waiterId: queryStaffId }
+            { type: "connection_established", waiterId: queryStaffId },
           );
           console.log(`Push notification sent to waiter ${queryStaffId}`);
         } else {
@@ -481,7 +538,7 @@ io.on("connection", async (socket) => {
       if (role === "waiter") {
         socket.join(`waiter_${staffId}`);
         console.log(
-          `Waiter ${staffId} connected to restaurant ${restaurantId}`
+          `Waiter ${staffId} connected to restaurant ${restaurantId}`,
         );
       } else if (role === "cook") {
         socket.join(`kitchen_${restaurantId}`);
@@ -500,20 +557,22 @@ io.on("connection", async (socket) => {
   socket.on("waiter_connect", async (data) => {
     try {
       // String yoki object bo'lishi mumkin
-      const waiterId = typeof data === 'string' ? data : data?.waiterId;
-      const restaurantId = typeof data === 'object' ? data?.restaurantId : null;
+      const waiterId = typeof data === "string" ? data : data?.waiterId;
+      const restaurantId = typeof data === "object" ? data?.restaurantId : null;
 
       if (!waiterId) {
         console.error("Waiter connect: waiterId is missing");
         return;
       }
 
-      console.log(`Waiter connect: waiterId=${waiterId}, restaurantId=${restaurantId}`);
+      console.log(
+        `Waiter connect: waiterId=${waiterId}, restaurantId=${restaurantId}`,
+      );
 
       const waiter = await Staff.findByIdAndUpdate(
         waiterId,
         { socketId: socket.id, isOnline: true },
-        { new: true }
+        { new: true },
       );
       if (waiter) {
         // Har doim shaxsiy room'ga qo'shish (shaxsiy xabarlar uchun)
@@ -523,9 +582,13 @@ io.on("connection", async (socket) => {
         // Bu real-time broadcast xabarlarni olish uchun kerak
         if (waiter.isWorking) {
           socket.join(`restaurant_${waiter.restaurantId}`);
-          console.log(`Waiter ${waiterId} (isWorking=true) joined rooms: waiter_${waiterId}, restaurant_${waiter.restaurantId}`);
+          console.log(
+            `Waiter ${waiterId} (isWorking=true) joined rooms: waiter_${waiterId}, restaurant_${waiter.restaurantId}`,
+          );
         } else {
-          console.log(`Waiter ${waiterId} (isWorking=false) joined only personal room: waiter_${waiterId}`);
+          console.log(
+            `Waiter ${waiterId} (isWorking=false) joined only personal room: waiter_${waiterId}`,
+          );
         }
 
         // Waiter'ga ulanish tasdiqlangan deb xabar yuborish
@@ -544,7 +607,7 @@ io.on("connection", async (socket) => {
             waiter.fcmToken,
             "Serverga ulandi!",
             `${waiter.firstName}, siz serverga muvaffaqiyatli ulandingiz!`,
-            { type: "connection_established", waiterId: waiterId }
+            { type: "connection_established", waiterId: waiterId },
           );
           console.log(`Push notification sent to waiter ${waiterId}`);
         } else {
@@ -558,19 +621,21 @@ io.on("connection", async (socket) => {
 
   socket.on("cook_connect", (data) => {
     // data object yoki string bo'lishi mumkin
-    const restaurantId = typeof data === 'object' ? data.restaurantId : data;
-    const cookId = typeof data === 'object' ? data.cookId : null;
+    const restaurantId = typeof data === "object" ? data.restaurantId : data;
+    const cookId = typeof data === "object" ? data.cookId : null;
     socket.join(`kitchen_${restaurantId || "default"}`);
     socket.join("kitchen"); // Legacy support - eski clientlar uchun
     if (cookId) {
       socket.join(`cook_${cookId}`); // Personal cook room for filtered orders
     }
-    console.log(`Cook ${cookId || 'unknown'} connected to kitchen_${restaurantId}`);
+    console.log(
+      `Cook ${cookId || "unknown"} connected to kitchen_${restaurantId}`,
+    );
   });
 
   socket.on("cashier_connect", async (data) => {
     // data object yoki string bo'lishi mumkin
-    const restaurantId = typeof data === 'object' ? data.restaurantId : data;
+    const restaurantId = typeof data === "object" ? data.restaurantId : data;
     socket.join(`cashier_${restaurantId || "default"}`);
     socket.join("cashier"); // Legacy support
     console.log(`Cashier connected to cashier_${restaurantId}`);
@@ -585,21 +650,23 @@ io.on("connection", async (socket) => {
         const activeOrders = await Order.find({
           restaurantId,
           isPaid: false,
-          createdAt: { $gte: today }
+          createdAt: { $gte: today },
         }).sort({ createdAt: -1 });
 
         // Bugungi to'langan buyurtmalar
         const paidOrders = await Order.find({
           restaurantId,
           isPaid: true,
-          createdAt: { $gte: today }
+          createdAt: { $gte: today },
         }).sort({ paidAt: -1 });
 
         socket.emit("cashier_orders", {
           activeOrders,
-          paidOrders
+          paidOrders,
         });
-        console.log(`Sent ${activeOrders.length} active and ${paidOrders.length} paid orders to cashier`);
+        console.log(
+          `Sent ${activeOrders.length} active and ${paidOrders.length} paid orders to cashier`,
+        );
       } catch (error) {
         console.error("Cashier orders error:", error);
       }
@@ -608,7 +675,7 @@ io.on("connection", async (socket) => {
 
   // Kassir buyurtmalarni so'rashi
   socket.on("get_cashier_orders", async (data) => {
-    const restaurantId = typeof data === 'object' ? data.restaurantId : data;
+    const restaurantId = typeof data === "object" ? data.restaurantId : data;
     if (!restaurantId) return;
 
     try {
@@ -619,21 +686,23 @@ io.on("connection", async (socket) => {
       const activeOrders = await Order.find({
         restaurantId,
         isPaid: false,
-        createdAt: { $gte: today }
+        createdAt: { $gte: today },
       }).sort({ createdAt: -1 });
 
       // Bugungi to'langan buyurtmalar
       const paidOrders = await Order.find({
         restaurantId,
         isPaid: true,
-        createdAt: { $gte: today }
+        createdAt: { $gte: today },
       }).sort({ paidAt: -1 });
 
       socket.emit("cashier_orders", {
         activeOrders,
-        paidOrders
+        paidOrders,
       });
-      console.log(`Cashier requested orders: ${activeOrders.length} active, ${paidOrders.length} paid`);
+      console.log(
+        `Cashier requested orders: ${activeOrders.length} active, ${paidOrders.length} paid`,
+      );
     } catch (error) {
       console.error("Get cashier orders error:", error);
     }
@@ -643,22 +712,26 @@ io.on("connection", async (socket) => {
   // ESLATMA: Waiter'lar uchun bu isWorking tekshiruvidan o'tmaydi
   // Waiter'lar faqat waiter_connect orqali isWorking tekshiruvi bilan room'ga qo'shiladi
   socket.on("join_restaurant", async (data) => {
-    const restaurantId = typeof data === 'object' ? data.restaurantId : data;
-    const staffId = typeof data === 'object' ? data.staffId : null;
+    const restaurantId = typeof data === "object" ? data.restaurantId : data;
+    const staffId = typeof data === "object" ? data.staffId : null;
 
     if (restaurantId) {
       // Agar staffId berilgan bo'lsa, isWorking tekshirish
       if (staffId) {
         const staff = await Staff.findById(staffId);
-        if (staff && staff.role === 'waiter' && !staff.isWorking) {
-          console.log(`Waiter ${staffId} (isWorking=false) blocked from joining restaurant_${restaurantId}`);
+        if (staff && staff.role === "waiter" && !staff.isWorking) {
+          console.log(
+            `Waiter ${staffId} (isWorking=false) blocked from joining restaurant_${restaurantId}`,
+          );
           return;
         }
       }
 
       socket.join(`restaurant_${restaurantId}`);
       socket.join(`kitchen_${restaurantId}`);
-      console.log(`Socket joined restaurant_${restaurantId} and kitchen_${restaurantId}`);
+      console.log(
+        `Socket joined restaurant_${restaurantId} and kitchen_${restaurantId}`,
+      );
     }
   });
 
@@ -681,7 +754,10 @@ io.on("connection", async (socket) => {
       // Validatsiya
       if (!restaurantId) {
         console.error("Order error: restaurantId is missing");
-        socket.emit("get_message", { msg: "error", error: "Restaurant ID topilmadi" });
+        socket.emit("get_message", {
+          msg: "error",
+          error: "Restaurant ID topilmadi",
+        });
         return;
       }
 
@@ -738,7 +814,8 @@ io.on("connection", async (socket) => {
       // allOrders - har bir bosishda alohida element (quantity yo'q)
       // selectFoods - unique elementlar (quantity bor bo'lishi kerak)
       const newItems = [];
-      const sourceItems = selectFoods && Array.isArray(selectFoods) ? selectFoods : [];
+      const sourceItems =
+        selectFoods && Array.isArray(selectFoods) ? selectFoods : [];
 
       // Agar selectFoods'da quantity to'g'ri bo'lmasa, allOrders'dan hisoblash
       const itemsMap = new Map();
@@ -746,7 +823,10 @@ io.on("connection", async (socket) => {
       // Avval selectFoods'ni tekshirish
       let useAllOrders = false;
       if (sourceItems.length > 0) {
-        const totalQtyFromSelectFoods = sourceItems.reduce((sum, f) => sum + (f.quantity || f.count || 1), 0);
+        const totalQtyFromSelectFoods = sourceItems.reduce(
+          (sum, f) => sum + (f.quantity || f.count || 1),
+          0,
+        );
         const allOrdersLength = (data.allOrders || []).length;
         // Agar quantity noto'g'ri bo'lsa (masalan, 3 ta qo'shilgan lekin quantity=1)
         if (totalQtyFromSelectFoods < allOrdersLength && allOrdersLength > 0) {
@@ -759,7 +839,7 @@ io.on("connection", async (socket) => {
       const getCategoryForFood = async (foodId) => {
         if (!foodId) return null;
         try {
-          const food = await Food.findById(foodId).select('category');
+          const food = await Food.findById(foodId).select("category");
           return food?.category || null;
         } catch (err) {
           console.error(`Error getting category for food ${foodId}:`, err);
@@ -794,7 +874,7 @@ io.on("connection", async (socket) => {
         for (const food of sourceItems) {
           const foodId = food._id || food.id;
           if (itemsMap.has(foodId)) {
-            itemsMap.get(foodId).quantity += (food.quantity || food.count || 1);
+            itemsMap.get(foodId).quantity += food.quantity || food.count || 1;
           } else {
             // Category yo'q bo'lsa, database'dan olish
             let category = food.category;
@@ -816,7 +896,10 @@ io.on("connection", async (socket) => {
       // Map'dan array'ga o'tkazish
       itemsMap.forEach((item) => newItems.push(item));
 
-      console.log('New items with categories:', newItems.map(i => ({ name: i.foodName, category: i.category })));
+      console.log(
+        "New items with categories:",
+        newItems.map((i) => ({ name: i.foodName, category: i.category })),
+      );
 
       // Agar mijozdan kelgan bo'lsa (fromWaiter=false), waiter tasdiqlashi kerak
       // Agar waiterdan kelgan bo'lsa (fromWaiter=true), to'g'ridan-to'g'ri kitchen/cashierga boradi
@@ -864,7 +947,9 @@ io.on("connection", async (socket) => {
           if (kitchenOrder.waiterId) {
             const waiter = await Staff.findById(kitchenOrder.waiterId);
             if (waiter) {
-              console.log(`Sending new_order_items to waiter ${waiter._id} (${waiter.firstName})`);
+              console.log(
+                `Sending new_order_items to waiter ${waiter._id} (${waiter.firstName})`,
+              );
               console.log(`Waiter FCM token exists: ${!!waiter.fcmToken}`);
 
               // Agar mijozdan kelgan bo'lsa - tasdiqlash so'rovi
@@ -884,7 +969,10 @@ io.on("connection", async (socket) => {
                     waiter.fcmToken,
                     "Buyurtma tasdiqlash!",
                     `${tableName} dan yangi buyurtma - tasdiqlang!`,
-                    { type: "pending_order_approval", orderId: kitchenOrder._id.toString() }
+                    {
+                      type: "pending_order_approval",
+                      orderId: kitchenOrder._id.toString(),
+                    },
                   );
                 }
               } else {
@@ -899,12 +987,17 @@ io.on("connection", async (socket) => {
 
                 // Push notification yuborish
                 if (waiter.fcmToken) {
-                  console.log(`Sending push notification for new items to waiter ${waiter._id}`);
+                  console.log(
+                    `Sending push notification for new items to waiter ${waiter._id}`,
+                  );
                   sendPushNotification(
                     waiter.fcmToken,
                     "Yangi buyurtma qo'shildi!",
                     `${tableName} ga yangi buyurtma qo'shildi`,
-                    { type: "new_order_items", orderId: kitchenOrder._id.toString() }
+                    {
+                      type: "new_order_items",
+                      orderId: kitchenOrder._id.toString(),
+                    },
                   );
                 }
               }
@@ -941,9 +1034,13 @@ io.on("connection", async (socket) => {
         // O'sha waiterni ishlatish (fallback)
         if (!assignedWaiter && fromWaiter && orderWaiterId) {
           assignedWaiter = await Staff.findById(orderWaiterId);
-          console.log(`No table waiter found, using order creator: ${assignedWaiter?.firstName} (${orderWaiterId})`);
+          console.log(
+            `No table waiter found, using order creator: ${assignedWaiter?.firstName} (${orderWaiterId})`,
+          );
         } else if (assignedWaiter) {
-          console.log(`Order assigned to table's waiter: ${assignedWaiter?.firstName}`);
+          console.log(
+            `Order assigned to table's waiter: ${assignedWaiter?.firstName}`,
+          );
         }
 
         // Kitchen order yaratish
@@ -966,34 +1063,46 @@ io.on("connection", async (socket) => {
 
         // Ofitsiyantga xabar
         if (assignedWaiter) {
-          console.log(`Sending notification to waiter ${assignedWaiter._id} (${assignedWaiter.firstName}), needsApproval=${needsWaiterApproval}`);
+          console.log(
+            `Sending notification to waiter ${assignedWaiter._id} (${assignedWaiter.firstName}), needsApproval=${needsWaiterApproval}`,
+          );
           console.log(`Waiter FCM token exists: ${!!assignedWaiter.fcmToken}`);
 
           // Push notification uchun FCM token
           let fcmToken = assignedWaiter.fcmToken;
           if (!fcmToken) {
-            const freshWaiter = await Staff.findById(assignedWaiter._id).select('fcmToken');
+            const freshWaiter = await Staff.findById(assignedWaiter._id).select(
+              "fcmToken",
+            );
             fcmToken = freshWaiter?.fcmToken;
-            console.log(`Fetched fresh FCM token for waiter ${assignedWaiter._id}: ${!!fcmToken}`);
+            console.log(
+              `Fetched fresh FCM token for waiter ${assignedWaiter._id}: ${!!fcmToken}`,
+            );
           }
 
           if (needsWaiterApproval) {
             // Mijozdan kelgan - tasdiqlash so'rovi
-            io.to(`waiter_${assignedWaiter._id}`).emit("pending_order_approval", {
-              order: kitchenOrder,
-              tableName,
-              tableNumber,
-              newItems: newItems,
-              isAddingToExisting: false,
-              message: `${tableName} dan yangi buyurtma tasdiqlash kutilmoqda!`,
-            });
+            io.to(`waiter_${assignedWaiter._id}`).emit(
+              "pending_order_approval",
+              {
+                order: kitchenOrder,
+                tableName,
+                tableNumber,
+                newItems: newItems,
+                isAddingToExisting: false,
+                message: `${tableName} dan yangi buyurtma tasdiqlash kutilmoqda!`,
+              },
+            );
 
             if (fcmToken) {
               sendPushNotification(
                 fcmToken,
                 "Buyurtma tasdiqlash!",
                 `${tableName} dan yangi buyurtma - tasdiqlang!`,
-                { type: "pending_order_approval", orderId: kitchenOrder._id.toString() }
+                {
+                  type: "pending_order_approval",
+                  orderId: kitchenOrder._id.toString(),
+                },
               );
             }
           } else {
@@ -1006,12 +1115,17 @@ io.on("connection", async (socket) => {
             });
 
             if (fcmToken) {
-              console.log(`Sending push notification for new table to waiter ${assignedWaiter._id}`);
+              console.log(
+                `Sending push notification for new table to waiter ${assignedWaiter._id}`,
+              );
               sendPushNotification(
                 fcmToken,
                 "Yangi buyurtma!",
                 `${tableName} dan yangi buyurtma keldi`,
-                { type: "new_table_assigned", orderId: kitchenOrder._id.toString() }
+                {
+                  type: "new_table_assigned",
+                  orderId: kitchenOrder._id.toString(),
+                },
               );
             }
           }
@@ -1021,12 +1135,18 @@ io.on("connection", async (socket) => {
       }
 
       // Mijozga javob
-      socket.emit("get_message", { msg: "success", orderId: order._id, needsApproval: needsWaiterApproval });
+      socket.emit("get_message", {
+        msg: "success",
+        orderId: order._id,
+        needsApproval: needsWaiterApproval,
+      });
 
       // MUHIM: Agar mijozdan kelgan bo'lsa va tasdiqlash kerak bo'lsa
       // Kitchen va Cashier ga XABAR YUBORMAYMIZ - waiter tasdiqlagunicha kutamiz
       if (needsWaiterApproval) {
-        console.log(`Order ${order._id} waiting for waiter approval - NOT sending to kitchen/cashier`);
+        console.log(
+          `Order ${order._id} waiting for waiter approval - NOT sending to kitchen/cashier`,
+        );
         // Faqat admin panelga xabar (monitoring uchun)
         io.to(`admin_${restaurantId}`).emit("new_order_pending_approval", {
           order: kitchenOrder,
@@ -1064,7 +1184,14 @@ io.on("connection", async (socket) => {
         .populate("waiterId");
 
       // Har bir oshpazga faqat uning category'lariga tegishli orderlarni yuborish
-      await emitFilteredKitchenOrders(io, restaurantId, kitchenOrder, kitchenOrders, newItems, isNewOrder);
+      await emitFilteredKitchenOrders(
+        io,
+        restaurantId,
+        kitchenOrder,
+        kitchenOrders,
+        newItems,
+        isNewOrder,
+      );
 
       // Kassaga xabar
       io.to(`cashier_${restaurantId}`).emit("new_kitchen_order", {
@@ -1110,8 +1237,11 @@ io.on("connection", async (socket) => {
             const food = await Food.findById(item.foodId);
             if (food) {
               food.cookingTimeCount = (food.cookingTimeCount || 0) + 1;
-              food.cookingTimeTotal = (food.cookingTimeTotal || 0) + cookingTimeSeconds;
-              food.averageCookingTime = Math.round(food.cookingTimeTotal / food.cookingTimeCount);
+              food.cookingTimeTotal =
+                (food.cookingTimeTotal || 0) + cookingTimeSeconds;
+              food.averageCookingTime = Math.round(
+                food.cookingTimeTotal / food.cookingTimeCount,
+              );
               await food.save();
             }
           } catch (err) {
@@ -1146,7 +1276,11 @@ io.on("connection", async (socket) => {
         .populate("waiterId");
 
       // Har bir cook'ga filtrlangan ma'lumot yuborish
-      await emitFilteredKitchenOrdersUpdated(io, order.restaurantId, kitchenOrders);
+      await emitFilteredKitchenOrdersUpdated(
+        io,
+        order.restaurantId,
+        kitchenOrders,
+      );
 
       // Waiter'ga ham xabar yuborish - faqat shu paytda tayyor bo'lgan 1 ta taom
       if (order.waiterId && item.isReady) {
@@ -1161,33 +1295,44 @@ io.on("connection", async (socket) => {
             tableName: order.tableName,
             tableNumber: order.tableNumber || 0,
             message: `${order.tableName}: ${item.foodName} tayyor!`,
-            items: [{
-              foodName: item.foodName,
-              quantity: item.quantity,
-              isReady: true
-            }],
+            items: [
+              {
+                foodName: item.foodName,
+                quantity: item.quantity,
+                isReady: true,
+              },
+            ],
           });
         } catch (saveErr) {
           console.error("WaiterNotification save error:", saveErr);
         }
 
         const notificationData = {
-          notificationId: savedNotification ? savedNotification._id.toString() : null,
+          notificationId: savedNotification
+            ? savedNotification._id.toString()
+            : null,
           orderId: order._id.toString(),
           tableName: order.tableName,
           tableNumber: order.tableNumber || 0,
           message: `${order.tableName}: ${item.foodName} tayyor!`,
-          items: [{
-            foodName: item.foodName,
-            quantity: item.quantity,
-            isReady: true
-          }],
+          items: [
+            {
+              foodName: item.foodName,
+              quantity: item.quantity,
+              isReady: true,
+            },
+          ],
           allReady: allReady,
         };
 
         // Socket orqali yuborish
-        io.to(`waiter_${order.waiterId}`).emit("order_ready_notification", notificationData);
-        console.log(`Item ready notification sent to waiter_${order.waiterId}: ${item.foodName}, notificationId: ${notificationData.notificationId}`);
+        io.to(`waiter_${order.waiterId}`).emit(
+          "order_ready_notification",
+          notificationData,
+        );
+        console.log(
+          `Item ready notification sent to waiter_${order.waiterId}: ${item.foodName}, notificationId: ${notificationData.notificationId}`,
+        );
       }
     } catch (error) {
       console.error("Item ready error:", error);
@@ -1220,7 +1365,7 @@ io.on("connection", async (socket) => {
             waiter.fcmToken,
             "Buyurtma tayyor!",
             `${order.tableName} uchun buyurtma tayyor - olib boring!`,
-            { type: "order_ready", orderId: order._id.toString() }
+            { type: "order_ready", orderId: order._id.toString() },
           );
         }
       }
@@ -1235,7 +1380,7 @@ io.on("connection", async (socket) => {
 
       io.to(`kitchen_${order.restaurantId}`).emit(
         "kitchen_orders_updated",
-        kitchenOrders
+        kitchenOrders,
       );
       io.to("kitchen").emit("kitchen_orders_updated", kitchenOrders); // Legacy
     } catch (error) {
@@ -1254,13 +1399,19 @@ io.on("connection", async (socket) => {
 
       const kitchenOrder = await KitchenOrder.findById(orderId);
       if (!kitchenOrder) {
-        socket.emit("approve_order_response", { success: false, error: "Buyurtma topilmadi" });
+        socket.emit("approve_order_response", {
+          success: false,
+          error: "Buyurtma topilmadi",
+        });
         return;
       }
 
       // Order allaqachon tasdiqlangan
       if (kitchenOrder.waiterApproved) {
-        socket.emit("approve_order_response", { success: false, error: "Buyurtma allaqachon tasdiqlangan" });
+        socket.emit("approve_order_response", {
+          success: false,
+          error: "Buyurtma allaqachon tasdiqlangan",
+        });
         return;
       }
 
@@ -1280,7 +1431,10 @@ io.on("connection", async (socket) => {
       const tableNumber = kitchenOrder.tableNumber;
 
       // Waiter'ga tasdiqlash xabari
-      socket.emit("approve_order_response", { success: true, orderId: kitchenOrder._id });
+      socket.emit("approve_order_response", {
+        success: true,
+        orderId: kitchenOrder._id,
+      });
 
       // ENDI Kitchen va Cashier ga xabar yuboramiz
       console.log(`Order ${orderId} approved - sending to kitchen and cashier`);
@@ -1295,7 +1449,14 @@ io.on("connection", async (socket) => {
         .populate("waiterId");
 
       // Har bir oshpazga faqat uning category'lariga tegishli orderlarni yuborish
-      await emitFilteredKitchenOrders(io, restaurantId, kitchenOrder, kitchenOrders, kitchenOrder.items, true);
+      await emitFilteredKitchenOrders(
+        io,
+        restaurantId,
+        kitchenOrder,
+        kitchenOrders,
+        kitchenOrder.items,
+        true,
+      );
 
       // Kassaga xabar
       const order = await Order.findById(kitchenOrder.orderId);
@@ -1323,7 +1484,10 @@ io.on("connection", async (socket) => {
       console.log(`Order ${orderId} approved and sent to kitchen/cashier`);
     } catch (error) {
       console.error("Approve order error:", error);
-      socket.emit("approve_order_response", { success: false, error: error.message });
+      socket.emit("approve_order_response", {
+        success: false,
+        error: error.message,
+      });
     }
   });
 
@@ -1334,17 +1498,25 @@ io.on("connection", async (socket) => {
   socket.on("reject_order", async (data) => {
     try {
       const { orderId, waiterId, reason } = data;
-      console.log(`Waiter ${waiterId} rejecting order ${orderId}, reason: ${reason}`);
+      console.log(
+        `Waiter ${waiterId} rejecting order ${orderId}, reason: ${reason}`,
+      );
 
       const kitchenOrder = await KitchenOrder.findById(orderId);
       if (!kitchenOrder) {
-        socket.emit("reject_order_response", { success: false, error: "Buyurtma topilmadi" });
+        socket.emit("reject_order_response", {
+          success: false,
+          error: "Buyurtma topilmadi",
+        });
         return;
       }
 
       // Order allaqachon tasdiqlangan
       if (kitchenOrder.waiterApproved) {
-        socket.emit("reject_order_response", { success: false, error: "Tasdiqlangan buyurtmani rad etib bo'lmaydi" });
+        socket.emit("reject_order_response", {
+          success: false,
+          error: "Tasdiqlangan buyurtmani rad etib bo'lmaydi",
+        });
         return;
       }
 
@@ -1374,7 +1546,10 @@ io.on("connection", async (socket) => {
       }
 
       // Waiter'ga tasdiqlash xabari
-      socket.emit("reject_order_response", { success: true, orderId: kitchenOrder._id });
+      socket.emit("reject_order_response", {
+        success: true,
+        orderId: kitchenOrder._id,
+      });
 
       // Mijozga xabar yuborish (agar session bo'lsa)
       const order = await Order.findById(orderObjId);
@@ -1400,7 +1575,10 @@ io.on("connection", async (socket) => {
       console.log(`Order ${orderId} rejected by waiter`);
     } catch (error) {
       console.error("Reject order error:", error);
-      socket.emit("reject_order_response", { success: false, error: error.message });
+      socket.emit("reject_order_response", {
+        success: false,
+        error: error.message,
+      });
     }
   });
 
@@ -1428,12 +1606,12 @@ io.on("connection", async (socket) => {
 
       io.to(`kitchen_${order.restaurantId}`).emit(
         "kitchen_orders_updated",
-        kitchenOrders
+        kitchenOrders,
       );
       io.to("kitchen").emit("kitchen_orders_updated", kitchenOrders); // Legacy
       io.to(`cashier_${order.restaurantId}`).emit(
         "kitchen_orders_updated",
-        kitchenOrders
+        kitchenOrders,
       );
       io.to("cashier").emit("kitchen_orders_updated", kitchenOrders); // Legacy
 
@@ -1478,7 +1656,7 @@ io.on("connection", async (socket) => {
       // To'lovni SaveOrder ga saqlash
       const totalPrice = order.items.reduce(
         (sum, item) => sum + item.price * item.quantity,
-        0
+        0,
       );
 
       let paymentStatus = "Naqt toladi";
@@ -1511,7 +1689,10 @@ io.on("connection", async (socket) => {
         orderId: order._id,
         tableName: order.tableName,
       });
-      io.to("cashier").emit("order_paid_success", { orderId: order._id, tableName: order.tableName }); // Legacy
+      io.to("cashier").emit("order_paid_success", {
+        orderId: order._id,
+        tableName: order.tableName,
+      }); // Legacy
 
       const kitchenOrders = await KitchenOrder.find({
         restaurantId: order.restaurantId,
@@ -1522,7 +1703,7 @@ io.on("connection", async (socket) => {
 
       io.to(`kitchen_${order.restaurantId}`).emit(
         "kitchen_orders_updated",
-        kitchenOrders
+        kitchenOrders,
       );
       io.to("kitchen").emit("kitchen_orders_updated", kitchenOrders); // Legacy
     } catch (error) {
@@ -1539,7 +1720,10 @@ io.on("connection", async (socket) => {
       // Order ni topish va yangilash
       const order = await Order.findById(orderId);
       if (!order) {
-        socket.emit("payment_confirmed", { success: false, error: "Buyurtma topilmadi" });
+        socket.emit("payment_confirmed", {
+          success: false,
+          error: "Buyurtma topilmadi",
+        });
         return;
       }
 
@@ -1560,7 +1744,7 @@ io.on("connection", async (socket) => {
       // KitchenOrder ni ham yangilash
       await KitchenOrder.updateMany(
         { orderId: order._id },
-        { isPaid: true, paidAt: new Date(), paymentMethod: paymentType }
+        { isPaid: true, paidAt: new Date(), paymentMethod: paymentType },
       );
 
       // Kassirga tasdiqlash
@@ -1569,14 +1753,17 @@ io.on("connection", async (socket) => {
       // Boshqa kassirlar uchun order_paid event
       io.to(`cashier_${restaurantId}`).emit("order_paid", {
         orderId: order._id,
-        paymentType: paymentType
+        paymentType: paymentType,
       });
       io.to("cashier").emit("order_paid", { orderId: order._id, paymentType }); // Legacy
 
       console.log(`Payment confirmed for order ${orderId}`);
     } catch (error) {
       console.error("Confirm payment error:", error);
-      socket.emit("payment_confirmed", { success: false, error: error.message });
+      socket.emit("payment_confirmed", {
+        success: false,
+        error: error.message,
+      });
     }
   });
 
@@ -1602,7 +1789,10 @@ io.on("connection", async (socket) => {
       // Stolni topish
       let table = await Table.findById(tableId);
       if (!table) {
-        socket.emit("call_waiter_response", { success: false, error: "Stol topilmadi" });
+        socket.emit("call_waiter_response", {
+          success: false,
+          error: "Stol topilmadi",
+        });
         return;
       }
 
@@ -1621,7 +1811,10 @@ io.on("connection", async (socket) => {
       }
 
       if (!waiter) {
-        socket.emit("call_waiter_response", { success: false, error: "Hozirda bo'sh ofitsiyant yo'q" });
+        socket.emit("call_waiter_response", {
+          success: false,
+          error: "Hozirda bo'sh ofitsiyant yo'q",
+        });
         return;
       }
 
@@ -1642,14 +1835,18 @@ io.on("connection", async (socket) => {
           message: `${tableName || table.title} dan chaqiruv!`,
           items: [],
         });
-        console.log(`WaiterNotification saved for waiter_call: ${tableName || table.title}, id: ${savedNotification._id}`);
+        console.log(
+          `WaiterNotification saved for waiter_call: ${tableName || table.title}, id: ${savedNotification._id}`,
+        );
       } catch (saveErr) {
         console.error("WaiterNotification save error (waiter_call):", saveErr);
       }
 
       // Waiter'ga notification yuborish - notificationId bilan
       io.to(`waiter_${waiter._id}`).emit("waiter_called", {
-        notificationId: savedNotification ? savedNotification._id.toString() : null,
+        notificationId: savedNotification
+          ? savedNotification._id.toString()
+          : null,
         tableId,
         tableName: tableName || table.title,
         tableNumber: table.tableNumber,
@@ -1662,7 +1859,7 @@ io.on("connection", async (socket) => {
           waiter.fcmToken,
           "Mijoz chaqirmoqda!",
           `${tableName || table.title} sizni chaqirmoqda!`,
-          { type: "waiter_called", tableId }
+          { type: "waiter_called", tableId },
         );
       }
 
@@ -1692,7 +1889,10 @@ io.on("connection", async (socket) => {
       });
     } catch (error) {
       console.error("Call waiter error:", error);
-      socket.emit("call_waiter_response", { success: false, error: error.message });
+      socket.emit("call_waiter_response", {
+        success: false,
+        error: error.message,
+      });
     }
   });
 
@@ -1705,29 +1905,46 @@ io.on("connection", async (socket) => {
 
       const kitchenOrder = await KitchenOrder.findById(orderId);
       if (!kitchenOrder) {
-        socket.emit("cancel_order_response", { success: false, error: "Buyurtma topilmadi" });
+        socket.emit("cancel_order_response", {
+          success: false,
+          error: "Buyurtma topilmadi",
+        });
         return;
       }
 
       const item = kitchenOrder.items[itemIndex];
       if (!item) {
-        socket.emit("cancel_order_response", { success: false, error: "Item topilmadi" });
+        socket.emit("cancel_order_response", {
+          success: false,
+          error: "Item topilmadi",
+        });
         return;
       }
 
       // Admin uchun - barcha taomlarni bekor qilish mumkin (hech qanday cheklov yo'q)
       if (fromAdmin) {
-        console.log(`Admin cancelling item: ${item.foodName} from order ${orderId}`);
+        console.log(
+          `Admin cancelling item: ${item.foodName} from order ${orderId}`,
+        );
       } else {
         // Mijoz uchun - faqat pending yoki preparing statusda bekor qilish mumkin
-        if (kitchenOrder.status === "ready" || kitchenOrder.status === "served") {
-          socket.emit("cancel_order_response", { success: false, error: "Bu buyurtmani bekor qilib bo'lmaydi" });
+        if (
+          kitchenOrder.status === "ready" ||
+          kitchenOrder.status === "served"
+        ) {
+          socket.emit("cancel_order_response", {
+            success: false,
+            error: "Bu buyurtmani bekor qilib bo'lmaydi",
+          });
           return;
         }
 
         // Agar item tayyor bo'lsa - mijoz bekor qila olmaydi
         if (item.isReady) {
-          socket.emit("cancel_order_response", { success: false, error: "Tayyor bo'lgan ovqatni bekor qilib bo'lmaydi" });
+          socket.emit("cancel_order_response", {
+            success: false,
+            error: "Tayyor bo'lgan ovqatni bekor qilib bo'lmaydi",
+          });
           return;
         }
       }
@@ -1745,7 +1962,10 @@ io.on("connection", async (socket) => {
       kitchenOrder.items.splice(itemIndex, 1);
 
       // TotalPrice ni yangilash
-      const newTotalPrice = kitchenOrder.items.reduce((sum, i) => sum + (i.price || 0) * (i.quantity || 1), 0);
+      const newTotalPrice = kitchenOrder.items.reduce(
+        (sum, i) => sum + (i.price || 0) * (i.quantity || 1),
+        0,
+      );
       kitchenOrder.totalPrice = newTotalPrice;
 
       // Agar barcha itemlar o'chirilgan bo'lsa - orderni to'liq o'chirish
@@ -1753,10 +1973,14 @@ io.on("connection", async (socket) => {
         // KitchenOrder va Order'ni to'liq o'chirish
         await Order.findByIdAndDelete(kitchenOrder.orderId);
         await KitchenOrder.findByIdAndDelete(kitchenOrder._id);
-        console.log(`Order ${orderId} to'liq o'chirildi - barcha itemlar bekor qilindi`);
+        console.log(
+          `Order ${orderId} to'liq o'chirildi - barcha itemlar bekor qilindi`,
+        );
       } else {
         // Order totalPrice ni ham yangilash
-        await Order.findByIdAndUpdate(kitchenOrder.orderId, { totalPrice: newTotalPrice });
+        await Order.findByIdAndUpdate(kitchenOrder.orderId, {
+          totalPrice: newTotalPrice,
+        });
         await kitchenOrder.save();
       }
 
@@ -1768,14 +1992,23 @@ io.on("connection", async (socket) => {
         .sort({ createdAt: 1 })
         .populate("waiterId");
 
-      io.to(`kitchen_${kitchenOrder.restaurantId}`).emit("kitchen_orders_updated", kitchenOrders);
+      io.to(`kitchen_${kitchenOrder.restaurantId}`).emit(
+        "kitchen_orders_updated",
+        kitchenOrders,
+      );
       io.to("kitchen").emit("kitchen_orders_updated", kitchenOrders); // Legacy
 
       // Waiter (ofitsiant) tomonga ham xabar - restoran room orqali
-      io.to(`restaurant_${kitchenOrder.restaurantId}`).emit("kitchen_orders_updated", kitchenOrders);
+      io.to(`restaurant_${kitchenOrder.restaurantId}`).emit(
+        "kitchen_orders_updated",
+        kitchenOrders,
+      );
 
       // Kassir tomonga xabar
-      io.to(`cashier_${kitchenOrder.restaurantId}`).emit("kitchen_orders_updated", kitchenOrders);
+      io.to(`cashier_${kitchenOrder.restaurantId}`).emit(
+        "kitchen_orders_updated",
+        kitchenOrders,
+      );
       io.to("cashier").emit("kitchen_orders_updated", kitchenOrders); // Legacy
       io.to(`cashier_${kitchenOrder.restaurantId}`).emit("order_updated", {
         orderId: kitchenOrder.orderId,
@@ -1797,18 +2030,27 @@ io.on("connection", async (socket) => {
       };
 
       // Kitchen (cook-panel) ga yuborish
-      io.to(`kitchen_${kitchenOrder.restaurantId}`).emit("order_item_cancelled", cancelEventData);
+      io.to(`kitchen_${kitchenOrder.restaurantId}`).emit(
+        "order_item_cancelled",
+        cancelEventData,
+      );
       io.to("kitchen").emit("order_item_cancelled", cancelEventData); // Legacy
 
       // My-orders (mijoz) uchun - faqat tegishli sessiyaga
       if (sessionId) {
-        io.to(`session_${sessionId}`).emit("order_item_cancelled", cancelEventData);
+        io.to(`session_${sessionId}`).emit(
+          "order_item_cancelled",
+          cancelEventData,
+        );
       }
 
       socket.emit("cancel_order_response", { success: true, newTotalPrice });
     } catch (error) {
       console.error("Cancel order error:", error);
-      socket.emit("cancel_order_response", { success: false, error: error.message });
+      socket.emit("cancel_order_response", {
+        success: false,
+        error: error.message,
+      });
     }
   });
 
@@ -1839,14 +2081,16 @@ io.on("connection", async (socket) => {
       // Har bir order uchun kitchen order statusini olish
       const ordersWithStatus = await Promise.all(
         orders.map(async (order) => {
-          const kitchenOrder = await KitchenOrder.findOne({ orderId: order._id });
+          const kitchenOrder = await KitchenOrder.findOne({
+            orderId: order._id,
+          });
           return {
             ...order.toObject(),
             kitchenOrderId: kitchenOrder ? kitchenOrder._id : null,
             kitchenStatus: kitchenOrder ? kitchenOrder.status : "pending",
             items: kitchenOrder ? kitchenOrder.items : [],
           };
-        })
+        }),
       );
 
       socket.emit("my_orders", ordersWithStatus);
@@ -1861,7 +2105,7 @@ io.on("connection", async (socket) => {
     try {
       await Staff.findOneAndUpdate(
         { socketId: socket.id },
-        { isOnline: false, socketId: null }
+        { isOnline: false, socketId: null },
       );
       console.log(`User disconnected: ${socket.id}`);
     } catch (error) {
