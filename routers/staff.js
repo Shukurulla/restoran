@@ -11,7 +11,13 @@ router.post("/staff/login", async (req, res) => {
   try {
     const { phone, password } = req.body;
 
-    const staff = await Staff.findOne({ phone }).populate("restaurantId");
+    // Telefon raqamni normalize qilish - '+' belgisi bilan
+    let normalizedPhone = phone;
+    if (phone && !phone.startsWith('+')) {
+      normalizedPhone = '+' + phone;
+    }
+
+    const staff = await Staff.findOne({ phone: normalizedPhone }).populate("restaurantId");
 
     if (!staff) {
       return res.status(401).json({ error: "Telefon yoki parol noto'g'ri" });
