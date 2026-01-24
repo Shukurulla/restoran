@@ -256,7 +256,8 @@ router.patch(
       item.readyQuantity = newReadyQuantity;
 
       // Agar hammasi tayyor bo'lsa, isReady = true
-      if (newReadyQuantity >= item.quantity) {
+      const isFullyReady = newReadyQuantity >= item.quantity;
+      if (isFullyReady) {
         item.isReady = true;
         item.readyAt = new Date();
         // Tayyorlash vaqtini hisoblash
@@ -293,7 +294,32 @@ router.patch(
         .sort({ createdAt: 1 })
         .populate("waiterId");
 
-      // Response - waiter uchun ham ma'lumot
+      // Socket.io orqali waiter'ga notification yuborish
+      const io = req.app.get("io");
+      if (io && order.waiterId) {
+        const message = isFullyReady
+          ? `${order.tableName}: ${item.foodName} (${item.quantity}x) to'liq tayyor!`
+          : `${order.tableName}: ${item.foodName} - ${readyCount}x tayyor (${newReadyQuantity}/${item.quantity})`;
+
+        io.to(`waiter_${order.waiterId}`).emit("order_ready_notification", {
+          orderId: order._id.toString(),
+          tableName: order.tableName,
+          tableNumber: order.tableNumber || 0,
+          message: message,
+          items: [{
+            foodName: item.foodName,
+            quantity: readyCount,
+            totalQuantity: item.quantity,
+            readyQuantity: newReadyQuantity,
+            isReady: isFullyReady,
+          }],
+          allReady: allReady,
+          isPartialReady: !isFullyReady,
+        });
+        console.log(`Partial ready notification sent to waiter_${order.waiterId}: ${readyCount}x ${item.foodName}`);
+      }
+
+      // Response
       res.json({
         data: orders,
         updatedOrder: order,
@@ -304,7 +330,7 @@ router.patch(
           readyCount: readyCount,
           totalReadyQuantity: newReadyQuantity,
           totalQuantity: item.quantity,
-          isFullyReady: newReadyQuantity >= item.quantity,
+          isFullyReady: isFullyReady,
           tableName: order.tableName,
           waiterId: order.waiterId
         }

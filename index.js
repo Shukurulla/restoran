@@ -51,6 +51,9 @@ const io = new Server(server, {
   pingInterval: 25000,
 });
 
+// Socket.io ni app ga attach qilish (router'larda ishlatish uchun)
+app.set("io", io);
+
 // Default super admin yaratish
 const createDefaultSuperAdmin = require("./seeds/super-admin.seed");
 
