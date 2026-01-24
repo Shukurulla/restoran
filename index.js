@@ -1361,6 +1361,151 @@ io.on("connection", async (socket) => {
     }
   });
 
+  // Qisman tayyor qilish (partial ready) - yangi event
+  socket.on("partial_item_ready", async (data) => {
+    try {
+      const { orderId, itemIndex, readyCount, restaurantId } = data;
+      const order = await KitchenOrder.findById(orderId);
+
+      if (!order) return;
+
+      const item = order.items[itemIndex];
+      if (!item) return;
+
+      const currentReadyQuantity = item.readyQuantity || 0;
+      const newReadyQuantity = currentReadyQuantity + readyCount;
+
+      // Umumiy sondan oshib ketmasligi kerak
+      if (newReadyQuantity > item.quantity) {
+        console.error(`Partial ready error: readyQuantity (${newReadyQuantity}) exceeds quantity (${item.quantity})`);
+        return;
+      }
+
+      // readyQuantity ni yangilash
+      item.readyQuantity = newReadyQuantity;
+
+      // Agar hammasi tayyor bo'lsa
+      if (newReadyQuantity >= item.quantity) {
+        item.isReady = true;
+        item.readyAt = new Date();
+        // Tayyorlash vaqtini hisoblash
+        const addedAt = item.addedAt || order.createdAt;
+        const cookingTimeSeconds = Math.floor((Date.now() - new Date(addedAt).getTime()) / 1000);
+        item.cookingTime = cookingTimeSeconds;
+
+        // Food'ning ortacha tayyorlash vaqtini yangilash
+        if (item.foodId) {
+          try {
+            const food = await Food.findById(item.foodId);
+            if (food) {
+              food.cookingTimeCount = (food.cookingTimeCount || 0) + 1;
+              food.cookingTimeTotal = (food.cookingTimeTotal || 0) + cookingTimeSeconds;
+              food.averageCookingTime = Math.round(food.cookingTimeTotal / food.cookingTimeCount);
+              await food.save();
+            }
+          } catch (err) {
+            console.error("Food cooking time update error:", err);
+          }
+        }
+      }
+
+      // Order statusini yangilash
+      const allReady = order.items.every((i) => i.isReady);
+      const someReady = order.items.some((i) => (i.readyQuantity || 0) > 0);
+
+      order.allItemsReady = allReady;
+
+      if (allReady) {
+        order.status = "ready";
+      } else if (someReady) {
+        order.status = "preparing";
+      } else {
+        order.status = "pending";
+      }
+
+      await order.save();
+
+      // Yangilangan ma'lumotni yuborish
+      const kitchenOrders = await KitchenOrder.find({
+        restaurantId: order.restaurantId,
+        status: { $in: ["pending", "preparing", "ready"] },
+        $or: [
+          { waiterApproved: true },
+          { waiterApproved: { $exists: false } }
+        ]
+      })
+        .sort({ createdAt: 1 })
+        .populate("waiterId");
+
+      // Har bir cook'ga filtrlangan ma'lumot yuborish
+      await emitFilteredKitchenOrdersUpdated(io, order.restaurantId, kitchenOrders);
+
+      // Waiter'ga notification yuborish - qisman tayyor haqida
+      if (order.waiterId) {
+        const isFullyReady = newReadyQuantity >= item.quantity;
+        const message = isFullyReady
+          ? `${order.tableName}: ${item.foodName} (${item.quantity}x) to'liq tayyor!`
+          : `${order.tableName}: ${item.foodName} - ${readyCount}x tayyor (${newReadyQuantity}/${item.quantity})`;
+
+        // Bazaga saqlash
+        let savedNotification = null;
+        try {
+          savedNotification = await WaiterNotification.create({
+            waiterId: order.waiterId,
+            restaurantId: order.restaurantId,
+            orderId: order._id,
+            type: "food_ready",
+            tableName: order.tableName,
+            tableNumber: order.tableNumber || 0,
+            message: message,
+            items: [{
+              foodName: item.foodName,
+              quantity: readyCount,
+              totalQuantity: item.quantity,
+              readyQuantity: newReadyQuantity,
+              isReady: isFullyReady,
+            }],
+          });
+        } catch (saveErr) {
+          console.error("WaiterNotification save error:", saveErr);
+        }
+
+        const notificationData = {
+          notificationId: savedNotification ? savedNotification._id.toString() : null,
+          orderId: order._id.toString(),
+          tableName: order.tableName,
+          tableNumber: order.tableNumber || 0,
+          message: message,
+          items: [{
+            foodName: item.foodName,
+            quantity: readyCount,
+            totalQuantity: item.quantity,
+            readyQuantity: newReadyQuantity,
+            isReady: isFullyReady,
+          }],
+          allReady: allReady,
+          isPartialReady: !isFullyReady,
+        };
+
+        io.to(`waiter_${order.waiterId}`).emit("order_ready_notification", notificationData);
+        console.log(`Partial ready notification sent to waiter_${order.waiterId}: ${readyCount}x ${item.foodName} (${newReadyQuantity}/${item.quantity})`);
+
+        // Push notification
+        const waiter = await Staff.findById(order.waiterId);
+        if (waiter?.fcmToken) {
+          sendPushNotification(
+            waiter.fcmToken,
+            isFullyReady ? "Taom tayyor!" : "Qisman tayyor!",
+            message,
+            { type: "partial_ready", orderId: order._id.toString() }
+          );
+        }
+      }
+    } catch (error) {
+      console.error("Partial item ready error:", error);
+    }
+  });
+
   // Oshpaz ofitsiyantga xabar yuborishi
   socket.on("notify_waiter", async (data) => {
     try {

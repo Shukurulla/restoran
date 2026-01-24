@@ -26,6 +26,11 @@ const kitchenOrderItemSchema = new mongoose.Schema({
     type: Boolean,
     default: false,
   },
+  // Qisman tayyor - nechta tayyor bo'lgani
+  readyQuantity: {
+    type: Number,
+    default: 0,
+  },
   readyAt: {
     type: Date,
     default: null,

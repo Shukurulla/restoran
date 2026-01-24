@@ -120,6 +120,22 @@ const menuItems = [
   { foodName: "Kokteil Bananli", price: 18000, category: "Sutli ichimliklar", body: "Bananli sut kokteyli", dosage: "350ml" },
   { foodName: "Kokteil Shokoladli", price: 18000, category: "Sutli ichimliklar", body: "Shokoladli sut kokteyli", dosage: "350ml" },
   { foodName: "Kokteil Qulupnayli", price: 20000, category: "Sutli ichimliklar", body: "Qulupnayli sut kokteyli", dosage: "350ml" },
+
+  // =================== RASMDAN QO'SHILGAN TAOMLAR ===================
+  // BAR
+  { foodName: "COLA 1.5 L", price: 16000, category: "Bar", body: "Coca-Cola 1.5 litr", dosage: "1500ml" },
+  { foodName: "FANTA 1.5 L", price: 16000, category: "Bar", body: "Fanta 1.5 litr", dosage: "1500ml" },
+  { foodName: "PEPSI 1.75 L", price: 17000, category: "Bar", body: "Pepsi 1.75 litr", dosage: "1750ml" },
+
+  // MENYU
+  { foodName: "НАН", price: 4000, category: "Menyu", body: "Tandirda pishgan non", dosage: "300g" },
+  { foodName: "ГОШ СОМСА", price: 12000, category: "Menyu", body: "Go'shtli somsa", dosage: "150g" },
+  { foodName: "ПАЛАУ", price: 40000, category: "Menyu", body: "An'anaviy palov", dosage: "400g" },
+  { foodName: "ПАЛАУ КАЗЫЛЫ", price: 45000, category: "Menyu", body: "Qazili palov", dosage: "450g" },
+  { foodName: "АЧЧИК-ЧУЧУК", price: 18000, category: "Menyu", body: "Achchiq-chuchuk salat", dosage: "200g" },
+  { foodName: "ЧАЙ ЗЕЛЕНЫЙ", price: 4000, category: "Menyu", body: "Yashil choy", dosage: "250ml" },
+  { foodName: "ЧАЙ ЧЕРНЫЙ", price: 4000, category: "Menyu", body: "Qora choy", dosage: "250ml" },
+  { foodName: "СВЕЖЫЙ САЛАТ", price: 18000, category: "Menyu", body: "Yangi sabzavotli salat", dosage: "200g" },
 ];
 
 // Default rasm - placeholder

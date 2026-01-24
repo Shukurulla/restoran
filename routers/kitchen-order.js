@@ -171,7 +171,7 @@ router.get("/kitchen-orders/waiter/:waiterId", cors(), async (req, res) => {
   }
 });
 
-// Bitta itemni tayyor deb belgilash
+// Bitta itemni tayyor deb belgilash (eski endpoint - backward compatibility)
 router.patch(
   "/kitchen-orders/:orderId/items/:itemIndex/ready",
   cors(),
@@ -216,6 +216,101 @@ router.patch(
 
       res.json({ data: orders, updatedOrder: order });
     } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  }
+);
+
+// Qisman tayyor qilish (partial ready) - yangi endpoint
+router.patch(
+  "/kitchen-orders/:orderId/items/:itemIndex/partial-ready",
+  cors(),
+  async (req, res) => {
+    try {
+      const { orderId, itemIndex } = req.params;
+      const { readyCount } = req.body; // Nechta tayyor qilingan
+
+      const order = await KitchenOrder.findById(orderId);
+
+      if (!order) {
+        return res.status(404).json({ error: "Order topilmadi" });
+      }
+
+      const index = parseInt(itemIndex);
+      if (index < 0 || index >= order.items.length) {
+        return res.status(400).json({ error: "Item topilmadi" });
+      }
+
+      const item = order.items[index];
+      const currentReadyQuantity = item.readyQuantity || 0;
+      const newReadyQuantity = currentReadyQuantity + readyCount;
+
+      // Umumiy sondan oshib ketmasligi kerak
+      if (newReadyQuantity > item.quantity) {
+        return res.status(400).json({
+          error: `Tayyor qilingan son (${newReadyQuantity}) umumiy sondan (${item.quantity}) oshib ketdi`
+        });
+      }
+
+      // readyQuantity ni yangilash
+      item.readyQuantity = newReadyQuantity;
+
+      // Agar hammasi tayyor bo'lsa, isReady = true
+      if (newReadyQuantity >= item.quantity) {
+        item.isReady = true;
+        item.readyAt = new Date();
+        // Tayyorlash vaqtini hisoblash
+        if (item.addedAt) {
+          item.cookingTime = Math.floor((Date.now() - new Date(item.addedAt).getTime()) / 1000);
+        }
+      }
+
+      // Order statusini yangilash
+      const allReady = order.items.every((i) => i.isReady);
+      const someReady = order.items.some((i) => (i.readyQuantity || 0) > 0);
+
+      order.allItemsReady = allReady;
+
+      if (allReady) {
+        order.status = "ready";
+      } else if (someReady) {
+        order.status = "preparing";
+      } else {
+        order.status = "pending";
+      }
+
+      await order.save();
+
+      // Barcha orderlarni qaytarish
+      const orders = await KitchenOrder.find({
+        restaurantId: order.restaurantId,
+        status: { $in: ["pending", "preparing", "ready"] },
+        $or: [
+          { waiterApproved: true },
+          { waiterApproved: { $exists: false } }
+        ]
+      })
+        .sort({ createdAt: 1 })
+        .populate("waiterId");
+
+      // Response - waiter uchun ham ma'lumot
+      res.json({
+        data: orders,
+        updatedOrder: order,
+        partialReady: {
+          orderId: order._id,
+          itemIndex: index,
+          foodName: item.foodName,
+          readyCount: readyCount,
+          totalReadyQuantity: newReadyQuantity,
+          totalQuantity: item.quantity,
+          isFullyReady: newReadyQuantity >= item.quantity,
+          tableName: order.tableName,
+          waiterId: order.waiterId
+        }
+      });
+    } catch (error) {
+      console.error("Partial ready error:", error);
       res.status(500).json({ error: error.message });
     }
   }
