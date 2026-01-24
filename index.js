@@ -740,6 +740,16 @@ io.on("connection", async (socket) => {
     }
   });
 
+  // Kassir room ga qo'shilish
+  socket.on("join_cashier", (data) => {
+    const restaurantId = typeof data === "object" ? data.restaurantId : data;
+    if (restaurantId) {
+      socket.join(`cashier_${restaurantId}`);
+      socket.join("cashier"); // Legacy room
+      console.log(`Socket joined cashier_${restaurantId}`);
+    }
+  });
+
   // Yangi buyurtma (mijozdan) - ORDER MERGING bilan
   socket.on("post_order", async (data) => {
     try {
