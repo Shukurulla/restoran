@@ -229,6 +229,7 @@ router.patch(
     try {
       const { orderId, itemIndex } = req.params;
       const { readyCount } = req.body; // Nechta tayyor qilingan
+      const WaiterNotification = require("../models/waiter-notification");
 
       const order = await KitchenOrder.findById(orderId);
 
@@ -301,7 +302,32 @@ router.patch(
           ? `${order.tableName}: ${item.foodName} (${item.quantity}x) to'liq tayyor!`
           : `${order.tableName}: ${item.foodName} - ${readyCount}x tayyor (${newReadyQuantity}/${item.quantity})`;
 
+        // Avval WaiterNotification ga saqlash - notificationId olish uchun
+        let savedNotification = null;
+        try {
+          savedNotification = await WaiterNotification.create({
+            waiterId: order.waiterId,
+            restaurantId: order.restaurantId,
+            orderId: order._id,
+            type: "food_ready",
+            tableName: order.tableName,
+            tableNumber: order.tableNumber || 0,
+            message: message,
+            items: [{
+              foodName: item.foodName,
+              quantity: readyCount,
+              totalQuantity: item.quantity,
+              readyQuantity: newReadyQuantity,
+              isReady: isFullyReady,
+            }],
+          });
+          console.log(`WaiterNotification saved for partial ready: ${item.foodName}, id: ${savedNotification._id}`);
+        } catch (saveErr) {
+          console.error("WaiterNotification save error (partial_ready):", saveErr);
+        }
+
         io.to(`waiter_${order.waiterId}`).emit("order_ready_notification", {
+          notificationId: savedNotification ? savedNotification._id.toString() : null,
           orderId: order._id.toString(),
           tableName: order.tableName,
           tableNumber: order.tableNumber || 0,
@@ -316,7 +342,7 @@ router.patch(
           allReady: allReady,
           isPartialReady: !isFullyReady,
         });
-        console.log(`Partial ready notification sent to waiter_${order.waiterId}: ${readyCount}x ${item.foodName}`);
+        console.log(`Partial ready notification sent to waiter_${order.waiterId}: ${readyCount}x ${item.foodName}, notificationId: ${savedNotification?._id}`);
       }
 
       // Response
