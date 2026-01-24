@@ -73,6 +73,26 @@ const staffSchema = mongoose.Schema(
   { timestamps: true }
 );
 
+// Telefon raqamni normalize qilish - probellarni olib tashlash
+function normalizePhone(phone) {
+  if (!phone) return phone;
+  // Barcha probellarni olib tashlash va faqat raqamlar + '+' qoldirish
+  let normalized = phone.replace(/\s+/g, '');
+  // Agar '+' bilan boshlanmasa, qo'shish
+  if (!normalized.startsWith('+')) {
+    normalized = '+' + normalized;
+  }
+  return normalized;
+}
+
+// Pre-save middleware - telefon raqamni avtomatik normalize qilish
+staffSchema.pre('save', function(next) {
+  if (this.phone) {
+    this.phone = normalizePhone(this.phone);
+  }
+  next();
+});
+
 // Parolni tekshirish (plain text compare)
 staffSchema.methods.comparePassword = async function (candidatePassword) {
   return this.password === candidatePassword;

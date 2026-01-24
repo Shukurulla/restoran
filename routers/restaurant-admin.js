@@ -111,6 +111,16 @@ router.get(
   }
 );
 
+// Telefon raqamni normalize qilish funksiyasi
+function normalizePhone(phone) {
+  if (!phone) return phone;
+  let normalized = phone.replace(/\s+/g, '');
+  if (!normalized.startsWith('+')) {
+    normalized = '+' + normalized;
+  }
+  return normalized;
+}
+
 // Yangi xodim qo'shish (waiter, cook, cashier)
 router.post(
   "/restaurant-admin/staff",
@@ -123,8 +133,11 @@ router.post(
       const validRoles = ["waiter", "cook", "cashier"];
       const staffRole = validRoles.includes(role) ? role : "waiter";
 
+      // Telefon raqamini normalize qilish
+      const normalizedPhone = normalizePhone(phone);
+
       // Telefon raqami boshqa restoranda ishlamoqdami tekshirish
-      const existingStaff = await Staff.findOne({ phone, status: "working" });
+      const existingStaff = await Staff.findOne({ phone: normalizedPhone, status: "working" });
 
       if (existingStaff) {
         return res.status(400).json({
@@ -198,8 +211,9 @@ router.put(
       }
 
       // Agar telefon raqami o'zgargan bo'lsa, uniqueligini tekshirish
-      if (phone && phone !== staff.phone) {
-        const existingStaff = await Staff.findOne({ phone, status: "working" });
+      const normalizedPhone = normalizePhone(phone);
+      if (normalizedPhone && normalizedPhone !== staff.phone) {
+        const existingStaff = await Staff.findOne({ phone: normalizedPhone, status: "working" });
         if (existingStaff) {
           return res.status(400).json({
             error: "Bu telefon raqami boshqa xodimga tegishli",
@@ -209,7 +223,7 @@ router.put(
 
       staff.firstName = firstName || staff.firstName;
       staff.lastName = lastName || staff.lastName;
-      staff.phone = phone || staff.phone;
+      staff.phone = normalizedPhone || staff.phone;
 
       if (password) {
         staff.password = password;
@@ -326,9 +340,10 @@ router.delete(
 router.get("/staff/check-phone/:phone", async (req, res) => {
   try {
     const { phone } = req.params;
+    const normalizedPhone = normalizePhone(phone);
 
     const existingStaff = await Staff.findOne({
-      phone,
+      phone: normalizedPhone,
       status: "working",
     }).populate("restaurantId", "name");
 
