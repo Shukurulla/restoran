@@ -114,10 +114,31 @@ router.post("/orders/:orderId/pay", cors(), async (req, res) => {
       return res.status(404).json({ error: "Buyurtma topilmadi" });
     }
 
+    // Order ni yangilash
     order.isPaid = true;
     order.paymentType = paymentType;
     order.paidAt = new Date();
+    order.status = "paid";
     await order.save();
+
+    // KitchenOrder ni ham yangilash - barcha itemlarni "served" qilish
+    await KitchenOrder.updateMany(
+      { orderId: order._id },
+      {
+        isPaid: true,
+        paidAt: new Date(),
+        paymentMethod: paymentType,
+        status: "served",
+        allItemsReady: true
+      }
+    );
+
+    // Stolni bo'shatish
+    if (order.tableId) {
+      await Table.findByIdAndUpdate(order.tableId, {
+        status: "free"
+      });
+    }
 
     res.json({ order });
   } catch (error) {

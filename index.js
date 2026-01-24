@@ -1048,6 +1048,13 @@ io.on("connection", async (socket) => {
           );
         }
 
+        // Order'ga waiter ma'lumotlarini qo'shish
+        if (assignedWaiter) {
+          order.waiterId = assignedWaiter._id;
+          order.waiterName = `${assignedWaiter.firstName} ${assignedWaiter.lastName}`;
+          await order.save();
+        }
+
         // Kitchen order yaratish
         kitchenOrder = await KitchenOrder.create({
           restaurantId,
@@ -1648,7 +1655,12 @@ io.on("connection", async (socket) => {
       await order.save();
 
       // Order statusini ham yangilash
-      await Order.findByIdAndUpdate(order.orderId, { status: "paid" });
+      await Order.findByIdAndUpdate(order.orderId, {
+        status: "paid",
+        isPaid: true,
+        paidAt: new Date(),
+        paymentType: paymentMethod || "cash"
+      });
 
       // Stolni bo'shatish va waiter'ni o'chirish
       if (order.tableId) {
@@ -1736,6 +1748,7 @@ io.on("connection", async (socket) => {
       order.paidAt = new Date();
       order.paymentType = paymentType || "cash";
       order.cashierId = cashierId;
+      order.status = "paid";
       await order.save();
 
       // Stolni bo'shatish
