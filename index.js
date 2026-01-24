@@ -1654,12 +1654,22 @@ io.on("connection", async (socket) => {
       }
       await order.save();
 
+      // Taomlar summasini hisoblash va 10% xizmat haqi qo'shish
+      const itemsTotal = order.items.reduce(
+        (sum, item) => sum + item.price * item.quantity,
+        0,
+      );
+      const serviceFee = Math.round(itemsTotal * 0.1);
+      const grandTotal = itemsTotal + serviceFee;
+
       // Order statusini ham yangilash
       await Order.findByIdAndUpdate(order.orderId, {
         status: "paid",
         isPaid: true,
         paidAt: new Date(),
-        paymentType: paymentMethod || "cash"
+        paymentType: paymentMethod || "cash",
+        totalPrice: grandTotal, // 10% xizmat haqi bilan
+        ofitsianService: serviceFee
       });
 
       // Stolni bo'shatish va waiter'ni o'chirish
@@ -1670,11 +1680,8 @@ io.on("connection", async (socket) => {
         });
       }
 
-      // To'lovni SaveOrder ga saqlash
-      const totalPrice = order.items.reduce(
-        (sum, item) => sum + item.price * item.quantity,
-        0,
-      );
+      // To'lovni SaveOrder ga saqlash - 10% bilan
+      const totalPrice = grandTotal;
 
       let paymentStatus = "Naqt toladi";
       if (paymentMethod === "card") {
@@ -1744,11 +1751,20 @@ io.on("connection", async (socket) => {
         return;
       }
 
+      // Taomlar summasini hisoblash va 10% xizmat haqi qo'shish
+      const itemsTotal = (order.selectFoods || order.allOrders || []).reduce((sum, item) => {
+        return sum + ((item.price || 0) * (item.quantity || item.count || 1));
+      }, 0);
+      const serviceFee = Math.round(itemsTotal * 0.1);
+      const grandTotal = itemsTotal + serviceFee;
+
       order.isPaid = true;
       order.paidAt = new Date();
       order.paymentType = paymentType || "cash";
       order.cashierId = cashierId;
       order.status = "paid";
+      order.totalPrice = grandTotal; // 10% xizmat haqi bilan
+      order.ofitsianService = serviceFee;
       await order.save();
 
       // Stolni bo'shatish

@@ -50,7 +50,20 @@ router.get("/orders/daily-summary", cors(), async (req, res) => {
     let unpaidAmount = 0;
 
     orders.forEach(order => {
-      const amount = order.totalPrice || 0;
+      // Agar to'langan bo'lsa, totalPrice allaqachon 10% bilan
+      // Agar to'lanmagan bo'lsa, 10% qo'shib hisoblash
+      let amount;
+      if (order.isPaid) {
+        amount = order.totalPrice || 0;
+      } else {
+        // To'lanmagan orderlar uchun 10% qo'shib hisoblash
+        const itemsTotal = (order.selectFoods || order.allOrders || []).reduce((sum, item) => {
+          return sum + ((item.price || 0) * (item.quantity || item.count || 1));
+        }, 0);
+        const serviceFee = Math.round(itemsTotal * 0.1);
+        amount = itemsTotal + serviceFee;
+      }
+
       totalRevenue += amount;
 
       if (order.isPaid) {
@@ -114,11 +127,22 @@ router.post("/orders/:orderId/pay", cors(), async (req, res) => {
       return res.status(404).json({ error: "Buyurtma topilmadi" });
     }
 
+    // Taomlar summasini hisoblash
+    const itemsTotal = (order.selectFoods || order.allOrders || []).reduce((sum, item) => {
+      return sum + ((item.price || 0) * (item.quantity || item.count || 1));
+    }, 0);
+
+    // 10% xizmat haqi
+    const serviceFee = Math.round(itemsTotal * 0.1);
+    const grandTotal = itemsTotal + serviceFee;
+
     // Order ni yangilash
     order.isPaid = true;
     order.paymentType = paymentType;
     order.paidAt = new Date();
     order.status = "paid";
+    order.totalPrice = grandTotal; // 10% xizmat haqi bilan
+    order.ofitsianService = serviceFee;
     await order.save();
 
     // KitchenOrder ni ham yangilash - barcha itemlarni "served" qilish
