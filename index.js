@@ -512,17 +512,19 @@ io.on("connection", async (socket) => {
           `Connection established event sent to waiter ${queryStaffId}`,
         );
 
-        // Push notification yuborish (app ochiq bo'lsa ham test uchun)
-        if (waiter.fcmToken) {
+        // Push notification yuborish - yangi fcmToken'ni olish
+        // Sabab: Token socket ulanishidan oldin register qilingan bo'lishi kerak
+        const freshWaiterForFcm = await Staff.findById(queryStaffId).select("fcmToken firstName");
+        if (freshWaiterForFcm?.fcmToken) {
           sendPushNotification(
-            waiter.fcmToken,
+            freshWaiterForFcm.fcmToken,
             "Serverga ulandi!",
             `${waiter.firstName}, siz serverga muvaffaqiyatli ulandingiz!`,
             { type: "connection_established", waiterId: queryStaffId },
           );
           console.log(`Push notification sent to waiter ${queryStaffId}`);
         } else {
-          console.log(`Waiter ${queryStaffId} has no FCM token`);
+          console.log(`Waiter ${queryStaffId} has no FCM token (checked fresh)`);
         }
       }
     } catch (error) {
