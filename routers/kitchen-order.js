@@ -228,8 +228,10 @@ router.patch(
   async (req, res) => {
     try {
       const { orderId, itemIndex } = req.params;
-      const { readyCount } = req.body; // Nechta tayyor qilingan
+      const { readyCount, cookId } = req.body; // Nechta tayyor qilingan va cook ID
       const WaiterNotification = require("../models/waiter-notification");
+      const Staff = require("../models/staff");
+      const Category = require("../models/category");
 
       const order = await KitchenOrder.findById(orderId);
 
@@ -284,7 +286,7 @@ router.patch(
       await order.save();
 
       // Barcha orderlarni qaytarish
-      const orders = await KitchenOrder.find({
+      let orders = await KitchenOrder.find({
         restaurantId: order.restaurantId,
         status: { $in: ["pending", "preparing", "ready"] },
         $or: [
@@ -294,6 +296,34 @@ router.patch(
       })
         .sort({ createdAt: 1 })
         .populate("waiterId");
+
+      // Agar cookId berilgan bo'lsa, faqat shu cook'ga tegishli categorylarni filter qilish
+      if (cookId) {
+        const cook = await Staff.findById(cookId);
+        if (cook && cook.assignedCategories && cook.assignedCategories.length > 0) {
+          const categories = await Category.find({
+            _id: { $in: cook.assignedCategories }
+          });
+          const categoryNames = categories.map(c => c.title.toLowerCase());
+
+          orders = orders.map(o => {
+            const orderObj = o.toObject ? o.toObject() : o;
+            const filteredItems = [];
+
+            (orderObj.items || []).forEach((itm, originalIdx) => {
+              if (itm.category && categoryNames.includes(itm.category.toLowerCase())) {
+                filteredItems.push({
+                  ...itm,
+                  originalIndex: originalIdx
+                });
+              }
+            });
+
+            if (filteredItems.length === 0) return null;
+            return { ...orderObj, items: filteredItems };
+          }).filter(o => o !== null);
+        }
+      }
 
       // Socket.io orqali waiter'ga notification yuborish
       const io = req.app.get("io");
@@ -363,6 +393,173 @@ router.patch(
       });
     } catch (error) {
       console.error("Partial ready error:", error);
+      res.status(500).json({ error: error.message });
+    }
+  }
+);
+
+// Ortga qaytarish (revert ready) - tayyor deb belgilangan itemni qaytarish
+router.patch(
+  "/kitchen-orders/:orderId/items/:itemIndex/revert-ready",
+  cors(),
+  async (req, res) => {
+    try {
+      const { orderId, itemIndex } = req.params;
+      const { revertCount, cookId } = req.body; // Nechtasini qaytarish va cook ID
+      const WaiterNotification = require("../models/waiter-notification");
+      const Staff = require("../models/staff");
+      const Category = require("../models/category");
+
+      const order = await KitchenOrder.findById(orderId);
+
+      if (!order) {
+        return res.status(404).json({ error: "Order topilmadi" });
+      }
+
+      const index = parseInt(itemIndex);
+      if (index < 0 || index >= order.items.length) {
+        return res.status(400).json({ error: "Item topilmadi" });
+      }
+
+      const item = order.items[index];
+      const currentReadyQuantity = item.readyQuantity || 0;
+
+      // Qaytarish soni tayyor qilingandan ko'p bo'lmasligi kerak
+      if (revertCount > currentReadyQuantity) {
+        return res.status(400).json({
+          error: `Qaytarish soni (${revertCount}) tayyor qilingan sondan (${currentReadyQuantity}) ko'p bo'lishi mumkin emas`
+        });
+      }
+
+      // readyQuantity ni kamaytirish
+      const newReadyQuantity = currentReadyQuantity - revertCount;
+      item.readyQuantity = newReadyQuantity;
+
+      // Agar hech narsa tayyor bo'lmasa, isReady = false
+      if (newReadyQuantity <= 0) {
+        item.isReady = false;
+        item.readyAt = null;
+      }
+
+      // Order statusini yangilash
+      const allReady = order.items.every((i) => i.isReady);
+      const someReady = order.items.some((i) => (i.readyQuantity || 0) > 0);
+
+      order.allItemsReady = allReady;
+
+      if (allReady) {
+        order.status = "ready";
+      } else if (someReady) {
+        order.status = "preparing";
+      } else {
+        order.status = "pending";
+      }
+
+      await order.save();
+
+      // Barcha orderlarni qaytarish
+      let orders = await KitchenOrder.find({
+        restaurantId: order.restaurantId,
+        status: { $in: ["pending", "preparing", "ready"] },
+        $or: [
+          { waiterApproved: true },
+          { waiterApproved: { $exists: false } }
+        ]
+      })
+        .sort({ createdAt: 1 })
+        .populate("waiterId");
+
+      // Agar cookId berilgan bo'lsa, faqat shu cook'ga tegishli categorylarni filter qilish
+      if (cookId) {
+        const cook = await Staff.findById(cookId);
+        if (cook && cook.assignedCategories && cook.assignedCategories.length > 0) {
+          const categories = await Category.find({
+            _id: { $in: cook.assignedCategories }
+          });
+          const categoryNames = categories.map(c => c.title.toLowerCase());
+
+          orders = orders.map(o => {
+            const orderObj = o.toObject ? o.toObject() : o;
+            const filteredItems = [];
+
+            (orderObj.items || []).forEach((itm, originalIdx) => {
+              if (itm.category && categoryNames.includes(itm.category.toLowerCase())) {
+                filteredItems.push({
+                  ...itm,
+                  originalIndex: originalIdx
+                });
+              }
+            });
+
+            if (filteredItems.length === 0) return null;
+            return { ...orderObj, items: filteredItems };
+          }).filter(o => o !== null);
+        }
+      }
+
+      // Socket.io orqali waiter'ga notification yuborish
+      const io = req.app.get("io");
+      if (io && order.waiterId) {
+        const message = `${order.tableName}: ${item.foodName} - ${revertCount}x qaytarildi (${newReadyQuantity}/${item.quantity} tayyor)`;
+
+        // WaiterNotification ga saqlash
+        let savedNotification = null;
+        try {
+          savedNotification = await WaiterNotification.create({
+            waiterId: order.waiterId,
+            restaurantId: order.restaurantId,
+            orderId: order._id,
+            type: "food_reverted",
+            tableName: order.tableName,
+            tableNumber: order.tableNumber || 0,
+            message: message,
+            items: [{
+              foodName: item.foodName,
+              quantity: revertCount,
+              totalQuantity: item.quantity,
+              readyQuantity: newReadyQuantity,
+              isReady: false,
+            }],
+          });
+          console.log(`WaiterNotification saved for revert: ${item.foodName}, id: ${savedNotification._id}`);
+        } catch (saveErr) {
+          console.error("WaiterNotification save error (revert_ready):", saveErr);
+        }
+
+        io.to(`waiter_${order.waiterId}`).emit("order_reverted_notification", {
+          notificationId: savedNotification ? savedNotification._id.toString() : null,
+          orderId: order._id.toString(),
+          tableName: order.tableName,
+          tableNumber: order.tableNumber || 0,
+          message: message,
+          items: [{
+            foodName: item.foodName,
+            quantity: revertCount,
+            totalQuantity: item.quantity,
+            readyQuantity: newReadyQuantity,
+            isReady: false,
+          }],
+        });
+        console.log(`Revert notification sent to waiter_${order.waiterId}: ${revertCount}x ${item.foodName}`);
+      }
+
+      // Response
+      res.json({
+        data: orders,
+        updatedOrder: order,
+        reverted: {
+          orderId: order._id,
+          itemIndex: index,
+          foodName: item.foodName,
+          revertCount: revertCount,
+          totalReadyQuantity: newReadyQuantity,
+          totalQuantity: item.quantity,
+          tableName: order.tableName,
+          waiterId: order.waiterId
+        }
+      });
+    } catch (error) {
+      console.error("Revert ready error:", error);
       res.status(500).json({ error: error.message });
     }
   }
