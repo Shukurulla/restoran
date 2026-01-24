@@ -47,7 +47,9 @@ router.get("/orders/daily-summary", cors(), async (req, res) => {
     let totalRevenue = 0;
     let cashRevenue = 0;
     let cardRevenue = 0;
+    let clickRevenue = 0;
     let unpaidAmount = 0;
+    let paidOrders = 0;
 
     orders.forEach(order => {
       // Agar to'langan bo'lsa, totalPrice allaqachon 10% bilan
@@ -55,6 +57,7 @@ router.get("/orders/daily-summary", cors(), async (req, res) => {
       let amount;
       if (order.isPaid) {
         amount = order.totalPrice || 0;
+        paidOrders += 1;
       } else {
         // To'lanmagan orderlar uchun 10% qo'shib hisoblash
         const itemsTotal = (order.selectFoods || order.allOrders || []).reduce((sum, item) => {
@@ -67,10 +70,20 @@ router.get("/orders/daily-summary", cors(), async (req, res) => {
       totalRevenue += amount;
 
       if (order.isPaid) {
-        if (order.paymentType === 'cash') {
-          cashRevenue += amount;
-        } else if (order.paymentType === 'card') {
-          cardRevenue += amount;
+        // Bo'lingan to'lov (split payment) bo'lsa
+        if (order.paymentSplit) {
+          cashRevenue += order.paymentSplit.cash || 0;
+          cardRevenue += order.paymentSplit.card || 0;
+          clickRevenue += order.paymentSplit.click || 0;
+        } else {
+          // Oddiy to'lov
+          if (order.paymentType === 'cash') {
+            cashRevenue += amount;
+          } else if (order.paymentType === 'card') {
+            cardRevenue += amount;
+          } else if (order.paymentType === 'click') {
+            clickRevenue += amount;
+          }
         }
       } else {
         unpaidAmount += amount;
@@ -82,7 +95,9 @@ router.get("/orders/daily-summary", cors(), async (req, res) => {
       totalRevenue,
       cashRevenue,
       cardRevenue,
-      unpaidAmount
+      clickRevenue,
+      unpaidAmount,
+      paidOrders
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -120,7 +135,7 @@ router.get("/orders/waiter-stats", cors(), async (req, res) => {
 router.post("/orders/:orderId/pay", cors(), async (req, res) => {
   try {
     const { orderId } = req.params;
-    const { paymentType } = req.body;
+    const { paymentType, paymentSplit, comment } = req.body;
 
     const order = await Order.findById(orderId);
     if (!order) {
@@ -143,6 +158,21 @@ router.post("/orders/:orderId/pay", cors(), async (req, res) => {
     order.status = "paid";
     order.totalPrice = grandTotal; // 10% xizmat haqi bilan
     order.ofitsianService = serviceFee;
+
+    // Bo'lingan to'lov (split payment)
+    if (paymentSplit) {
+      order.paymentSplit = {
+        cash: paymentSplit.cash || 0,
+        card: paymentSplit.card || 0,
+        click: paymentSplit.click || 0,
+      };
+    }
+
+    // To'lov izohi
+    if (comment) {
+      order.comment = comment;
+    }
+
     await order.save();
 
     // KitchenOrder ni ham yangilash - barcha itemlarni "served" qilish
@@ -161,6 +191,23 @@ router.post("/orders/:orderId/pay", cors(), async (req, res) => {
     if (order.tableId) {
       await Table.findByIdAndUpdate(order.tableId, {
         status: "free"
+      });
+    }
+
+    // Socket.io orqali cashier ga xabar berish
+    const io = req.app.get("io");
+    if (io) {
+      io.to(`cashier_${order.restaurantId}`).emit("order_paid_success", {
+        orderId: order._id,
+        tableName: order.tableName,
+        paymentType,
+        paymentSplit,
+        grandTotal,
+      });
+
+      // Order completed event (barcha itemlar yetkazildi)
+      io.to(`cashier_${order.restaurantId}`).emit("order_completed", {
+        orderId: order._id,
       });
     }
 

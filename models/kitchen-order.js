@@ -112,7 +112,7 @@ const kitchenOrderSchema = new mongoose.Schema(
     },
     paymentMethod: {
       type: String,
-      enum: ['cash', 'card', 'debt'],
+      enum: ['cash', 'card', 'click', 'debt'],
       default: 'cash',
     },
     debtInfo: {

@@ -1361,6 +1361,25 @@ io.on("connection", async (socket) => {
           `Item ready notification sent to waiter_${order.waiterId}: ${item.foodName}, notificationId: ${notificationData.notificationId}`,
         );
       }
+
+      // Cashier ga item status o'zgarganini xabar berish
+      io.to(`cashier_${order.restaurantId}`).emit("item_status_updated", {
+        orderId: order._id,
+        itemIndex,
+        itemName: item.foodName,
+        isReady: item.isReady,
+        status: order.status,
+        allReady: allReady,
+      });
+      io.to("cashier").emit("item_status_updated", {
+        orderId: order._id,
+        itemIndex,
+        itemName: item.foodName,
+        isReady: item.isReady,
+        status: order.status,
+        allReady: allReady,
+      }); // Legacy
+
     } catch (error) {
       console.error("Item ready error:", error);
     }
@@ -1506,6 +1525,29 @@ io.on("connection", async (socket) => {
           );
         }
       }
+
+      // Cashierga item status o'zgarganini xabar berish
+      io.to(`cashier_${order.restaurantId}`).emit("item_status_updated", {
+        orderId: order._id,
+        itemIndex,
+        itemName: item.foodName,
+        readyQuantity: newReadyQuantity,
+        totalQuantity: item.quantity,
+        isReady: item.isReady,
+        status: order.status,
+        allReady: allReady,
+      });
+      io.to("cashier").emit("item_status_updated", {
+        orderId: order._id,
+        itemIndex,
+        itemName: item.foodName,
+        readyQuantity: newReadyQuantity,
+        totalQuantity: item.quantity,
+        isReady: item.isReady,
+        status: order.status,
+        allReady: allReady,
+      }); // Legacy
+
     } catch (error) {
       console.error("Partial item ready error:", error);
     }
@@ -1793,6 +1835,29 @@ io.on("connection", async (socket) => {
           orderId: order._id,
         });
       }
+
+      // Cashierga food status o'zgarganini xabar berish
+      io.to(`cashier_${order.restaurantId}`).emit("food_status_changed", {
+        orderId: order._id,
+        status: "served",
+        tableName: order.tableName,
+      });
+      io.to("cashier").emit("food_status_changed", {
+        orderId: order._id,
+        status: "served",
+        tableName: order.tableName,
+      }); // Legacy
+
+      // Barcha itemlar yetkazildi - order completed
+      io.to(`cashier_${order.restaurantId}`).emit("order_completed", {
+        orderId: order._id,
+        tableName: order.tableName,
+      });
+      io.to("cashier").emit("order_completed", {
+        orderId: order._id,
+        tableName: order.tableName,
+      }); // Legacy
+
     } catch (error) {
       console.error("Order served error:", error);
     }
@@ -1801,7 +1866,7 @@ io.on("connection", async (socket) => {
   // Kassa to'lov
   socket.on("mark_paid", async (data) => {
     try {
-      const { orderId, paymentMethod, debtInfo } = data;
+      const { orderId, paymentMethod, paymentSplit, comment, debtInfo } = data;
       const order = await KitchenOrder.findById(orderId);
 
       if (!order) return;
@@ -1822,15 +1887,31 @@ io.on("connection", async (socket) => {
       const serviceFee = Math.round(itemsTotal * 0.1);
       const grandTotal = itemsTotal + serviceFee;
 
-      // Order statusini ham yangilash
-      await Order.findByIdAndUpdate(order.orderId, {
+      // Order statusini ham yangilash - split payment va comment bilan
+      const updateData = {
         status: "paid",
         isPaid: true,
         paidAt: new Date(),
         paymentType: paymentMethod || "cash",
         totalPrice: grandTotal, // 10% xizmat haqi bilan
         ofitsianService: serviceFee
-      });
+      };
+
+      // Bo'lingan to'lov (split payment)
+      if (paymentSplit) {
+        updateData.paymentSplit = {
+          cash: paymentSplit.cash || 0,
+          card: paymentSplit.card || 0,
+          click: paymentSplit.click || 0,
+        };
+      }
+
+      // To'lov izohi
+      if (comment) {
+        updateData.comment = comment;
+      }
+
+      await Order.findByIdAndUpdate(order.orderId, updateData);
 
       // Stolni bo'shatish va waiter'ni o'chirish
       if (order.tableId) {
@@ -1846,8 +1927,17 @@ io.on("connection", async (socket) => {
       let paymentStatus = "Naqt toladi";
       if (paymentMethod === "card") {
         paymentStatus = "Plastik Karta";
+      } else if (paymentMethod === "click") {
+        paymentStatus = "Click";
       } else if (paymentMethod === "debt") {
         paymentStatus = "Qarz";
+      } else if (paymentSplit) {
+        // Bo'lingan to'lov
+        const parts = [];
+        if (paymentSplit.cash > 0) parts.push(`Naqd: ${paymentSplit.cash}`);
+        if (paymentSplit.card > 0) parts.push(`Karta: ${paymentSplit.card}`);
+        if (paymentSplit.click > 0) parts.push(`Click: ${paymentSplit.click}`);
+        paymentStatus = parts.join(", ");
       }
 
       await SaveOrder.create({

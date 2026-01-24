@@ -103,7 +103,21 @@ const orderSchema = mongoose.Schema(
     },
     paymentType: {
       type: String,
-      enum: ["cash", "card", null],
+      enum: ["cash", "card", "click", null],
+      default: null,
+    },
+    // Bo'lingan to'lov (split payment)
+    paymentSplit: {
+      type: {
+        cash: { type: Number, default: 0 },
+        card: { type: Number, default: 0 },
+        click: { type: Number, default: 0 },
+      },
+      default: null,
+    },
+    // To'lov izohi
+    comment: {
+      type: String,
       default: null,
     },
     paidAt: {
