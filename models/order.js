@@ -86,6 +86,30 @@ const orderSchema = mongoose.Schema(
       type: String,
       default: null,
     },
+    // Waiter ma'lumotlari
+    waiterId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Staff",
+      default: null,
+    },
+    waiterName: {
+      type: String,
+      default: null,
+    },
+    // To'lov ma'lumotlari
+    isPaid: {
+      type: Boolean,
+      default: false,
+    },
+    paymentType: {
+      type: String,
+      enum: ["cash", "card", null],
+      default: null,
+    },
+    paidAt: {
+      type: Date,
+      default: null,
+    },
   },
   { timestamps: true }
 );

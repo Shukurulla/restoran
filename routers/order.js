@@ -15,6 +15,116 @@ router.get("/orders", cors(), async (req, res) => {
   res.json({ data: orders });
 });
 
+// ============ CASHIER ENDPOINTS ============
+
+// Bugungi buyurtmalar
+router.get("/orders/today", cors(), async (req, res) => {
+  try {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const orders = await Order.find({
+      createdAt: { $gte: today }
+    }).sort({ createdAt: -1 });
+
+    res.json({ orders });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Kunlik hisobot (summary)
+router.get("/orders/daily-summary", cors(), async (req, res) => {
+  try {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const orders = await Order.find({
+      createdAt: { $gte: today }
+    });
+
+    let totalOrders = orders.length;
+    let totalRevenue = 0;
+    let cashRevenue = 0;
+    let cardRevenue = 0;
+    let unpaidAmount = 0;
+
+    orders.forEach(order => {
+      const amount = order.totalPrice || 0;
+      totalRevenue += amount;
+
+      if (order.isPaid) {
+        if (order.paymentType === 'cash') {
+          cashRevenue += amount;
+        } else if (order.paymentType === 'card') {
+          cardRevenue += amount;
+        }
+      } else {
+        unpaidAmount += amount;
+      }
+    });
+
+    res.json({
+      totalOrders,
+      totalRevenue,
+      cashRevenue,
+      cardRevenue,
+      unpaidAmount
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Ofitsiantlar statistikasi
+router.get("/orders/waiter-stats", cors(), async (req, res) => {
+  try {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const orders = await Order.find({
+      createdAt: { $gte: today }
+    });
+
+    const waiterMap = new Map();
+
+    orders.forEach(order => {
+      const waiterName = order.waiterName || 'Noma\'lum';
+      const existing = waiterMap.get(waiterName) || { name: waiterName, orders: 0, revenue: 0 };
+      existing.orders += 1;
+      existing.revenue += order.totalPrice || 0;
+      waiterMap.set(waiterName, existing);
+    });
+
+    const stats = Array.from(waiterMap.values());
+    res.json({ stats });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// To'lov qilish
+router.post("/orders/:orderId/pay", cors(), async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    const { paymentType } = req.body;
+
+    const order = await Order.findById(orderId);
+    if (!order) {
+      return res.status(404).json({ error: "Buyurtma topilmadi" });
+    }
+
+    order.isPaid = true;
+    order.paymentType = paymentType;
+    order.paidAt = new Date();
+    await order.save();
+
+    res.json({ order });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 router.post("/edit-order/:id", cors(), async (req, res) => {
   await Order.findByIdAndUpdate(req.params.id, req.body);
   const orders = await Order.find();
