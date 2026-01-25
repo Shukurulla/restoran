@@ -21,7 +21,8 @@ router.get("/kitchen-orders", cors(), async (req, res) => {
       // Default: pending va preparing
       statusFilter = { $in: ["pending", "preparing"] };
     } else if (status === "all") {
-      statusFilter = { $in: ["pending", "preparing", "ready"] };
+      // Admin panel uchun - barcha statuslar
+      statusFilter = { $in: ["pending", "preparing", "ready", "served"] };
     } else {
       statusFilter = { $in: [status] };
     }
