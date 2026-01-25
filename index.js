@@ -759,7 +759,9 @@ io.on("connection", async (socket) => {
   // Yangi buyurtma (mijozdan) - ORDER MERGING bilan
   socket.on("post_order", async (data) => {
     try {
-      console.log("Received order data:", JSON.stringify(data, null, 2));
+      console.log("\n========== YANGI ORDER KELDI ==========");
+      console.log("Vaqt:", new Date().toLocaleString("uz-UZ"));
+      console.log("Raw data:", JSON.stringify(data, null, 2));
 
       const {
         restaurantId,
@@ -771,6 +773,15 @@ io.on("connection", async (socket) => {
         fromWaiter,
         waiterId: orderWaiterId,
       } = data;
+
+      console.log("------- ORDER MA'LUMOTLARI -------");
+      console.log("Restaurant ID:", restaurantId);
+      console.log("Table ID:", tableId);
+      console.log("Table Name:", tableName);
+      console.log("From Waiter:", fromWaiter);
+      console.log("Waiter ID (orderWaiterId):", orderWaiterId);
+      console.log("Foods count:", selectFoods?.length || 0);
+      console.log("----------------------------------");
 
       // Validatsiya
       if (!restaurantId) {
