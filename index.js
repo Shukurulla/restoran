@@ -886,6 +886,7 @@ io.on("connection", async (socket) => {
               quantity: 1,
               price: food.price || 0,
               isReady: false,
+              addedAt: new Date(), // Vaqt uchun
             });
           }
         }
@@ -908,6 +909,7 @@ io.on("connection", async (socket) => {
               quantity: food.quantity || food.count || 1,
               price: food.price || 0,
               isReady: false,
+              addedAt: new Date(), // Vaqt uchun
             });
           }
         }
