@@ -1592,11 +1592,12 @@ io.on("connection", async (socket) => {
         .sort({ createdAt: 1 })
         .populate("waiterId");
 
-      io.to(`kitchen_${order.restaurantId}`).emit(
-        "kitchen_orders_updated",
+      // Har bir cook'ga filtrlangan ma'lumot yuborish
+      await emitFilteredKitchenOrdersUpdated(
+        io,
+        order.restaurantId,
         kitchenOrders,
       );
-      io.to("kitchen").emit("kitchen_orders_updated", kitchenOrders); // Legacy
     } catch (error) {
       console.error("Notify waiter error:", error);
     }
@@ -1818,16 +1819,12 @@ io.on("connection", async (socket) => {
         .sort({ createdAt: 1 })
         .populate("waiterId");
 
-      io.to(`kitchen_${order.restaurantId}`).emit(
-        "kitchen_orders_updated",
+      // Har bir cook'ga filtrlangan ma'lumot yuborish
+      await emitFilteredKitchenOrdersUpdated(
+        io,
+        order.restaurantId,
         kitchenOrders,
       );
-      io.to("kitchen").emit("kitchen_orders_updated", kitchenOrders); // Legacy
-      io.to(`cashier_${order.restaurantId}`).emit(
-        "kitchen_orders_updated",
-        kitchenOrders,
-      );
-      io.to("cashier").emit("kitchen_orders_updated", kitchenOrders); // Legacy
 
       // Ofitsiyantga tasdiqlash
       if (order.waiterId) {
@@ -1975,11 +1972,12 @@ io.on("connection", async (socket) => {
         .sort({ createdAt: 1 })
         .populate("waiterId");
 
-      io.to(`kitchen_${order.restaurantId}`).emit(
-        "kitchen_orders_updated",
+      // Har bir cook'ga filtrlangan ma'lumot yuborish
+      await emitFilteredKitchenOrdersUpdated(
+        io,
+        order.restaurantId,
         kitchenOrders,
       );
-      io.to("kitchen").emit("kitchen_orders_updated", kitchenOrders); // Legacy
     } catch (error) {
       console.error("Mark paid error:", error);
     }
@@ -2276,24 +2274,18 @@ io.on("connection", async (socket) => {
         .sort({ createdAt: 1 })
         .populate("waiterId");
 
-      io.to(`kitchen_${kitchenOrder.restaurantId}`).emit(
-        "kitchen_orders_updated",
+      // Har bir cook'ga filtrlangan ma'lumot yuborish
+      await emitFilteredKitchenOrdersUpdated(
+        io,
+        kitchenOrder.restaurantId,
         kitchenOrders,
       );
-      io.to("kitchen").emit("kitchen_orders_updated", kitchenOrders); // Legacy
 
       // Waiter (ofitsiant) tomonga ham xabar - restoran room orqali
       io.to(`restaurant_${kitchenOrder.restaurantId}`).emit(
         "kitchen_orders_updated",
         kitchenOrders,
       );
-
-      // Kassir tomonga xabar
-      io.to(`cashier_${kitchenOrder.restaurantId}`).emit(
-        "kitchen_orders_updated",
-        kitchenOrders,
-      );
-      io.to("cashier").emit("kitchen_orders_updated", kitchenOrders); // Legacy
       io.to(`cashier_${kitchenOrder.restaurantId}`).emit("order_updated", {
         orderId: kitchenOrder.orderId,
         kitchenOrderId: kitchenOrder._id,
