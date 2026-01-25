@@ -69,6 +69,7 @@ router.post("/foods-create", cors(), authenticateRestaurantAdmin, upload.single(
     const foodData = {
       ...req.body,
       image: imageUrl,
+      dosage: "1 porsiya",
       restaurantId: req.restaurantId, // Faqat o'z restorani uchun yaratish
     };
 

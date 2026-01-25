@@ -52,18 +52,21 @@ router.get("/orders/daily-summary", cors(), async (req, res) => {
     let paidOrders = 0;
 
     orders.forEach(order => {
-      // Agar to'langan bo'lsa, totalPrice allaqachon 10% bilan
-      // Agar to'lanmagan bo'lsa, 10% qo'shib hisoblash
+      // Agar to'langan bo'lsa, totalPrice allaqachon tayyor
+      // Agar to'lanmagan bo'lsa, 10% qo'shib hisoblash (saboy uchun 10% yo'q)
       let amount;
+      const isSaboy = order.orderType === "saboy";
+
       if (order.isPaid) {
         amount = order.totalPrice || 0;
         paidOrders += 1;
       } else {
-        // To'lanmagan orderlar uchun 10% qo'shib hisoblash
+        // To'lanmagan orderlar uchun
         const itemsTotal = (order.selectFoods || order.allOrders || []).reduce((sum, item) => {
           return sum + ((item.price || 0) * (item.quantity || item.count || 1));
         }, 0);
-        const serviceFee = Math.round(itemsTotal * 0.1);
+        // Saboy uchun xizmat haqi yo'q
+        const serviceFee = isSaboy ? 0 : Math.round(itemsTotal * 0.1);
         amount = itemsTotal + serviceFee;
       }
 
@@ -147,8 +150,9 @@ router.post("/orders/:orderId/pay", cors(), async (req, res) => {
       return sum + ((item.price || 0) * (item.quantity || item.count || 1));
     }, 0);
 
-    // 10% xizmat haqi
-    const serviceFee = Math.round(itemsTotal * 0.1);
+    // 10% xizmat haqi (saboy uchun yo'q)
+    const isSaboy = order.orderType === "saboy";
+    const serviceFee = isSaboy ? 0 : Math.round(itemsTotal * 0.1);
 
     // Soatlik haq hisoblash
     let hourlyChargeTotal = 0;
@@ -248,6 +252,85 @@ router.post("/delete-order/:id", cors(), async (req, res) => {
   await Order.findByIdAndRemove(req.params.id);
   const orders = await Order.find();
   res.json({ data: orders });
+});
+
+// ============ SABOY (OLIB KETISH) ============
+
+// Saboy order yaratish - to'g'ridan-to'g'ri to'langan, oshxonaga yuborilmaydi
+router.post("/orders/saboy", cors(), async (req, res) => {
+  try {
+    const { restaurantId, items, paymentType, paymentSplit, comment } = req.body;
+
+    if (!restaurantId) {
+      return res.status(400).json({ error: "Restaurant ID topilmadi" });
+    }
+
+    if (!items || items.length === 0) {
+      return res.status(400).json({ error: "Mahsulotlar tanlanmagan" });
+    }
+
+    // Bugungi saboy raqamini olish
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const saboyCount = await Order.countDocuments({
+      restaurantId,
+      orderType: "saboy",
+      createdAt: { $gte: today },
+    });
+    const saboyNumber = saboyCount + 1;
+
+    // Taomlar summasini hisoblash (10% xizmat haqi YO'Q)
+    const itemsTotal = items.reduce((sum, item) => {
+      return sum + ((item.price || 0) * (item.quantity || 1));
+    }, 0);
+
+    // Saboy uchun xizmat haqi yo'q
+    const grandTotal = itemsTotal;
+
+    // Order yaratish - to'g'ridan-to'g'ri to'langan holda
+    const order = await Order.create({
+      restaurantId,
+      orderType: "saboy",
+      saboyNumber,
+      tableId: null,
+      tableName: `Saboy #${saboyNumber}`,
+      tableNumber: 0,
+      selectFoods: items,
+      allOrders: items,
+      totalPrice: grandTotal,
+      ofitsianService: 0, // Xizmat haqi yo'q
+      status: "paid",
+      isPaid: true,
+      paymentType: paymentType || "cash",
+      paymentSplit: paymentSplit || null,
+      comment: comment || null,
+      paidAt: new Date(),
+      waiterApproved: true,
+      approvedAt: new Date(),
+    });
+
+    // Socket orqali cashierga yangilash xabari
+    const io = req.app.get("io");
+    if (io) {
+      io.to(`cashier_${restaurantId}`).emit("saboy_order_created", {
+        order,
+        saboyNumber,
+        grandTotal,
+      });
+    }
+
+    console.log(`Saboy order #${saboyNumber} yaratildi: ${grandTotal} so'm`);
+
+    res.json({
+      success: true,
+      order,
+      saboyNumber,
+      grandTotal,
+    });
+  } catch (error) {
+    console.error("Saboy order error:", error);
+    res.status(500).json({ error: error.message });
+  }
 });
 
 // ============ STOL KO'CHIRISH ============

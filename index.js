@@ -907,10 +907,14 @@ io.on("connection", async (socket) => {
         sessionId,
         fromWaiter,
         waiterId: orderWaiterId,
+        orderType = "dine-in", // Buyurtma turi: dine-in yoki saboy
       } = data;
+
+      const isSaboy = orderType === "saboy";
 
       console.log("------- ORDER MA'LUMOTLARI -------");
       console.log("Restaurant ID:", restaurantId);
+      console.log("Order Type:", orderType, isSaboy ? "(SABOY)" : "");
       console.log("Table ID:", tableId);
       console.log("Table Name:", tableName);
       console.log("From Waiter:", fromWaiter);
@@ -928,7 +932,8 @@ io.on("connection", async (socket) => {
         return;
       }
 
-      if (!tableId) {
+      // Saboy uchun tableId shart emas
+      if (!isSaboy && !tableId) {
         console.error("Order error: tableId is missing");
         socket.emit("get_message", { msg: "error", error: "Stol tanlanmagan" });
         return;

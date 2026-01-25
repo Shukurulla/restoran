@@ -7,6 +7,17 @@ const orderSchema = mongoose.Schema(
       ref: "Restaurant",
       required: true,
     },
+    // Buyurtma turi: dine-in (stolda), saboy (olib ketish)
+    orderType: {
+      type: String,
+      enum: ["dine-in", "saboy"],
+      default: "dine-in",
+    },
+    // Saboy uchun tartib raqami
+    saboyNumber: {
+      type: Number,
+      default: null,
+    },
     sessionId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "QRSession",
@@ -31,7 +42,7 @@ const orderSchema = mongoose.Schema(
     tableId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Table",
-      required: true,
+      default: null, // Saboy uchun null bo'lishi mumkin
     },
     totalPrice: {
       type: Number,
@@ -40,7 +51,7 @@ const orderSchema = mongoose.Schema(
     },
     tableName: {
       type: String,
-      required: true,
+      default: null, // Saboy uchun "Saboy #X" bo'ladi
     },
     tableNumber: {
       type: Number,

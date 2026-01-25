@@ -59,6 +59,12 @@ const kitchenOrderSchema = new mongoose.Schema(
       ref: "Restaurant",
       required: true,
     },
+    // Buyurtma turi: dine-in (stolda), saboy (olib ketish)
+    orderType: {
+      type: String,
+      enum: ["dine-in", "saboy"],
+      default: "dine-in",
+    },
     orderId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Orders",
@@ -67,11 +73,11 @@ const kitchenOrderSchema = new mongoose.Schema(
     tableId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Table",
-      required: true,
+      default: null, // Saboy uchun null
     },
     tableName: {
       type: String,
-      required: true,
+      default: null, // Saboy uchun "Saboy #X"
     },
     tableNumber: {
       type: Number,
