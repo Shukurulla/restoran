@@ -6,13 +6,28 @@ const cors = require("cors");
 
 // Barcha kitchen orderlarni olish (oshpaz uchun)
 // cookId parameter bilan - faqat shu cook'ga biriktirilgan categorylarni ko'rsatadi
+// status parameter bilan - "preparing" (pending+preparing) yoki "ready" yoki "all"
 router.get("/kitchen-orders", cors(), async (req, res) => {
   try {
-    const { restaurantId, cookId } = req.query;
+    const { restaurantId, cookId, status } = req.query;
     const Staff = require("../models/staff");
+    const Category = require("../models/category");
+
+    // Status bo'yicha filter
+    let statusFilter;
+    if (status === "ready") {
+      statusFilter = { $in: ["ready"] };
+    } else if (status === "preparing" || !status) {
+      // Default: pending va preparing
+      statusFilter = { $in: ["pending", "preparing"] };
+    } else if (status === "all") {
+      statusFilter = { $in: ["pending", "preparing", "ready"] };
+    } else {
+      statusFilter = { $in: [status] };
+    }
 
     const filter = {
-      status: { $in: ["pending", "preparing"] },
+      status: statusFilter,
       // MUHIM: Faqat waiter tomonidan tasdiqlangan orderlarni ko'rsatish
       // yoki eski orderlar (waiterApproved field yo'q)
       $or: [
@@ -36,7 +51,6 @@ router.get("/kitchen-orders", cors(), async (req, res) => {
 
       if (cook && cook.assignedCategories && cook.assignedCategories.length > 0) {
         // Category ID'larni name'larga o'girish
-        const Category = require("../models/category");
         const categories = await Category.find({
           _id: { $in: cook.assignedCategories }
         });
@@ -47,14 +61,20 @@ router.get("/kitchen-orders", cors(), async (req, res) => {
         // Har bir orderdagi itemlarni filter qilish - faqat shu cook'ga tegishli categorylar
         orders = orders.map(order => {
           const orderObj = order.toObject();
-          // Faqat shu cook'ga biriktirilgan category'dagi itemlarni ko'rsatish
-          orderObj.items = orderObj.items.filter(item => {
-            // item.category - bu category NAME (string)
-            // categoryNames - bu category NAME'lar array (lowercase)
-            return item.category && categoryNames.includes(item.category.toLowerCase());
+          // Original indexlarni saqlash
+          const filteredItems = [];
+          orderObj.items.forEach((item, originalIdx) => {
+            if (item.category && categoryNames.includes(item.category.toLowerCase())) {
+              filteredItems.push({
+                ...item,
+                originalIndex: originalIdx
+              });
+            }
           });
-          return orderObj;
-        }).filter(order => order.items.length > 0); // Bo'sh orderlarni olib tashlash
+
+          if (filteredItems.length === 0) return null;
+          return { ...orderObj, items: filteredItems };
+        }).filter(order => order !== null);
       }
     }
 
@@ -356,7 +376,8 @@ router.patch(
 
       await order.save();
 
-      // Barcha orderlarni qaytarish
+      // Barcha orderlarni qaytarish - "ready" statusini ham qo'shish
+      // Shunda cook tayyor bo'lgan itemlarni ham "Tayyor" tabida ko'ra oladi
       let orders = await KitchenOrder.find({
         restaurantId: order.restaurantId,
         status: { $in: ["pending", "preparing", "ready"] },

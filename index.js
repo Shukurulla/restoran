@@ -1437,10 +1437,10 @@ io.on("connection", async (socket) => {
       // Auto-ready: agar cook'ning autoReady=true bo'lsa, uning category'laridagi itemlarni avtomatik tayyor qilish
       await processAutoReadyItems(io, kitchenOrder, restaurantId);
 
-      // Oshpazlarga xabar - FAQAT TASDIQLANGAN ORDERLAR
+      // Oshpazlarga xabar - FAQAT TASDIQLANGAN ORDERLAR (ready ham qo'shildi)
       const kitchenOrders = await KitchenOrder.find({
         restaurantId,
-        status: { $in: ["pending", "preparing"] },
+        status: { $in: ["pending", "preparing", "ready"] },
         waiterApproved: true, // Faqat tasdiqlangan orderlar
       })
         .sort({ createdAt: 1 })
@@ -1890,10 +1890,10 @@ io.on("connection", async (socket) => {
       // ENDI Kitchen va Cashier ga xabar yuboramiz
       console.log(`Order ${orderId} approved - sending to kitchen and cashier`);
 
-      // Oshpazlarga xabar
+      // Oshpazlarga xabar (ready ham qo'shildi)
       const kitchenOrders = await KitchenOrder.find({
         restaurantId,
-        status: { $in: ["pending", "preparing"] },
+        status: { $in: ["pending", "preparing", "ready"] },
         waiterApproved: true,
       })
         .sort({ createdAt: 1 })
