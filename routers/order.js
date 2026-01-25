@@ -614,6 +614,117 @@ router.patch("/orders/:orderId/items/:itemId/quantity", cors(), async (req, res)
   }
 });
 
+// ============ WAITER O'ZGARTIRISH ============
+
+// Order uchun waiter o'zgartirish
+router.patch("/orders/:orderId/waiter", cors(), async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    const { waiterId } = req.body;
+
+    if (!waiterId) {
+      return res.status(400).json({ error: "Waiter ID kerak" });
+    }
+
+    // Yangi waiter ni olish
+    const newWaiter = await Staff.findById(waiterId);
+    if (!newWaiter) {
+      return res.status(404).json({ error: "Ofitsiant topilmadi" });
+    }
+
+    // Order ni topish
+    let order = await Order.findById(orderId);
+    let kitchenOrder = null;
+    let restaurantId = null;
+    let oldWaiterId = null;
+    let oldWaiterName = null;
+
+    if (!order) {
+      // KitchenOrder dan qidirish
+      kitchenOrder = await KitchenOrder.findById(orderId);
+      if (kitchenOrder) {
+        restaurantId = kitchenOrder.restaurantId;
+        oldWaiterId = kitchenOrder.waiterId;
+        oldWaiterName = kitchenOrder.waiterName;
+        if (kitchenOrder.orderId) {
+          order = await Order.findById(kitchenOrder.orderId);
+        }
+      }
+    } else {
+      restaurantId = order.restaurantId;
+      oldWaiterId = order.waiterId;
+      oldWaiterName = order.waiterName;
+      kitchenOrder = await KitchenOrder.findOne({ orderId: order._id });
+    }
+
+    if (!order && !kitchenOrder) {
+      return res.status(404).json({ error: "Buyurtma topilmadi" });
+    }
+
+    const newWaiterName = `${newWaiter.firstName} ${newWaiter.lastName}`;
+
+    // Order ni yangilash
+    if (order) {
+      order.waiterId = waiterId;
+      order.waiterName = newWaiterName;
+      await order.save();
+    }
+
+    // KitchenOrder ni yangilash
+    if (kitchenOrder) {
+      kitchenOrder.waiterId = waiterId;
+      kitchenOrder.waiterName = newWaiterName;
+      await kitchenOrder.save();
+    }
+
+    // Socket orqali xabar berish
+    const io = req.app.get("io");
+    if (io && restaurantId) {
+      const eventData = {
+        orderId: order?._id || kitchenOrder._id,
+        oldWaiterId,
+        oldWaiterName,
+        newWaiterId: waiterId,
+        newWaiterName,
+        tableName: order?.tableName || kitchenOrder?.tableName
+      };
+
+      // Barcha tomonlarga xabar yuborish
+      io.to(`restaurant_${restaurantId}`).emit("order_waiter_changed", eventData);
+      io.to(`cashier_${restaurantId}`).emit("order_waiter_changed", eventData);
+      io.to(`kitchen_${restaurantId}`).emit("order_waiter_changed", eventData);
+
+      // Eski waiter ga xabar
+      if (oldWaiterId) {
+        io.to(`waiter_${oldWaiterId}`).emit("order_waiter_changed", {
+          ...eventData,
+          message: `${order?.tableName || kitchenOrder?.tableName} buyurtmasi ${newWaiterName} ga o'tkazildi`
+        });
+      }
+
+      // Yangi waiter ga xabar
+      io.to(`waiter_${waiterId}`).emit("order_waiter_changed", {
+        ...eventData,
+        message: `${order?.tableName || kitchenOrder?.tableName} buyurtmasi sizga biriktirildi`
+      });
+    }
+
+    console.log(`Order ${orderId} waiter o'zgartirildi: ${oldWaiterName} -> ${newWaiterName}`);
+
+    res.json({
+      success: true,
+      order: order || kitchenOrder,
+      oldWaiterId,
+      oldWaiterName,
+      newWaiterId: waiterId,
+      newWaiterName
+    });
+  } catch (error) {
+    console.error("Update waiter error:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // ============ SABOY (OLIB KETISH) ============
 
 // Saboy order yaratish - to'g'ridan-to'g'ri to'langan, oshxonaga yuborilmaydi
