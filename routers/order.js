@@ -248,10 +248,172 @@ router.post("/edit-order/:id", cors(), async (req, res) => {
   res.json({ data: orders });
 });
 
+// Order ni to'liq o'chirish (KitchenOrder bilan birga)
 router.post("/delete-order/:id", cors(), async (req, res) => {
-  await Order.findByIdAndRemove(req.params.id);
-  const orders = await Order.find();
-  res.json({ data: orders });
+  try {
+    const orderId = req.params.id;
+
+    // Order ni topish
+    const order = await Order.findById(orderId);
+    if (!order) {
+      return res.status(404).json({ error: "Buyurtma topilmadi" });
+    }
+
+    const restaurantId = order.restaurantId;
+    const tableId = order.tableId;
+
+    // KitchenOrder larni o'chirish
+    await KitchenOrder.deleteMany({ orderId: orderId });
+
+    // Order ni o'chirish
+    await Order.findByIdAndRemove(orderId);
+
+    // Agar stol bo'lsa va boshqa active order yo'q bo'lsa - stolni bo'shatish
+    if (tableId) {
+      const otherActiveOrders = await Order.countDocuments({
+        tableId: tableId,
+        status: { $nin: ["paid", "cancelled"] }
+      });
+
+      if (otherActiveOrders === 0) {
+        await Table.findByIdAndUpdate(tableId, { status: "free" });
+      }
+    }
+
+    // Socket orqali xabar berish
+    const io = req.app.get("io");
+    if (io && restaurantId) {
+      io.to(`restaurant_${restaurantId}`).emit("order_deleted", { orderId });
+      io.to(`cashier_${restaurantId}`).emit("order_deleted", { orderId });
+      io.to(`kitchen_${restaurantId}`).emit("order_deleted", { orderId });
+    }
+
+    console.log(`Order ${orderId} to'liq o'chirildi`);
+
+    const orders = await Order.find();
+    res.json({ success: true, data: orders });
+  } catch (error) {
+    console.error("Delete order error:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ============ ITEM O'CHIRISH ============
+
+// Order dan bitta itemni o'chirish
+router.delete("/orders/:orderId/items/:itemId", cors(), async (req, res) => {
+  try {
+    const { orderId, itemId } = req.params;
+
+    const order = await Order.findById(orderId);
+    if (!order) {
+      return res.status(404).json({ error: "Buyurtma topilmadi" });
+    }
+
+    // selectFoods dan o'chirish
+    if (order.selectFoods && order.selectFoods.length > 0) {
+      order.selectFoods = order.selectFoods.filter(item =>
+        item._id?.toString() !== itemId && item.foodId?.toString() !== itemId
+      );
+    }
+
+    // allOrders dan o'chirish
+    if (order.allOrders && order.allOrders.length > 0) {
+      order.allOrders = order.allOrders.filter(item =>
+        item._id?.toString() !== itemId && item.foodId?.toString() !== itemId
+      );
+    }
+
+    // Agar barcha itemlar o'chirilgan bo'lsa - orderni ham o'chirish
+    const remainingItems = order.selectFoods?.length || order.allOrders?.length || 0;
+    if (remainingItems === 0) {
+      // KitchenOrder larni o'chirish
+      await KitchenOrder.deleteMany({ orderId: orderId });
+      await Order.findByIdAndRemove(orderId);
+
+      // Stolni bo'shatish
+      if (order.tableId) {
+        const otherActiveOrders = await Order.countDocuments({
+          tableId: order.tableId,
+          status: { $nin: ["paid", "cancelled"] }
+        });
+
+        if (otherActiveOrders === 0) {
+          await Table.findByIdAndUpdate(order.tableId, { status: "free" });
+        }
+      }
+
+      // Socket orqali xabar berish
+      const io = req.app.get("io");
+      if (io && order.restaurantId) {
+        io.to(`restaurant_${order.restaurantId}`).emit("order_deleted", { orderId });
+        io.to(`cashier_${order.restaurantId}`).emit("order_deleted", { orderId });
+        io.to(`kitchen_${order.restaurantId}`).emit("order_deleted", { orderId });
+      }
+
+      return res.json({
+        success: true,
+        orderDeleted: true,
+        message: "Barcha itemlar o'chirilgani uchun buyurtma ham o'chirildi"
+      });
+    }
+
+    // Yangi summani hisoblash
+    const items = order.selectFoods || order.allOrders || [];
+    const newTotal = items.reduce((sum, item) => {
+      return sum + ((item.price || 0) * (item.quantity || item.count || 1));
+    }, 0);
+
+    order.totalPrice = newTotal;
+    await order.save();
+
+    // KitchenOrder ni ham yangilash
+    await KitchenOrder.updateMany(
+      { orderId: orderId },
+      {
+        items: items,
+        $pull: {
+          items: {
+            $or: [
+              { _id: itemId },
+              { foodId: itemId }
+            ]
+          }
+        }
+      }
+    );
+
+    // Socket orqali xabar berish
+    const io = req.app.get("io");
+    if (io && order.restaurantId) {
+      io.to(`restaurant_${order.restaurantId}`).emit("order_item_deleted", {
+        orderId,
+        itemId,
+        newTotal
+      });
+      io.to(`cashier_${order.restaurantId}`).emit("order_item_deleted", {
+        orderId,
+        itemId,
+        newTotal
+      });
+      io.to(`kitchen_${order.restaurantId}`).emit("order_item_deleted", {
+        orderId,
+        itemId
+      });
+    }
+
+    console.log(`Order ${orderId} dan item ${itemId} o'chirildi`);
+
+    res.json({
+      success: true,
+      order,
+      remainingItems: items.length,
+      newTotal
+    });
+  } catch (error) {
+    console.error("Delete item error:", error);
+    res.status(500).json({ error: error.message });
+  }
 });
 
 // ============ SABOY (OLIB KETISH) ============

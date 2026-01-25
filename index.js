@@ -2662,15 +2662,6 @@ app.get("/", (req, res) => {
   res.json({ message: "Restaurant API Server", version: "2.0" });
 });
 
-app.get("/restaurant", async (req, res) => {
-  try {
-    const restaurants = await Category.find();
-    const foods = await Food.find()
-    res.status(200).json({ status: "success", data: restaurants , foods});
-  } catch (error) {
-    res.status(500).json({ status: "error", message: error.message });
-  }
-});
 
 const PORT = process.env.PORT || 5000;
 server.listen(PORT, () => {
