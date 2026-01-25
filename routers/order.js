@@ -248,25 +248,45 @@ router.post("/edit-order/:id", cors(), async (req, res) => {
   res.json({ data: orders });
 });
 
-// Order ni to'liq o'chirish (KitchenOrder bilan birga)
+// Order yoki KitchenOrder ni to'liq o'chirish
 router.post("/delete-order/:id", cors(), async (req, res) => {
   try {
     const orderId = req.params.id;
 
-    // Order ni topish
-    const order = await Order.findById(orderId);
+    // Avval Order dan qidirish
+    let order = await Order.findById(orderId);
+    let kitchenOrder = null;
+    let restaurantId = null;
+    let tableId = null;
+
+    // Agar Order topilmasa, KitchenOrder dan qidirish
     if (!order) {
+      kitchenOrder = await KitchenOrder.findById(orderId);
+      if (kitchenOrder) {
+        restaurantId = kitchenOrder.restaurantId;
+        tableId = kitchenOrder.tableId;
+        // Original Order ni ham o'chirishga harakat qilish
+        if (kitchenOrder.orderId) {
+          order = await Order.findById(kitchenOrder.orderId);
+        }
+      }
+    } else {
+      restaurantId = order.restaurantId;
+      tableId = order.tableId;
+    }
+
+    if (!order && !kitchenOrder) {
       return res.status(404).json({ error: "Buyurtma topilmadi" });
     }
 
-    const restaurantId = order.restaurantId;
-    const tableId = order.tableId;
-
     // KitchenOrder larni o'chirish
-    await KitchenOrder.deleteMany({ orderId: orderId });
-
-    // Order ni o'chirish
-    await Order.findByIdAndRemove(orderId);
+    if (kitchenOrder) {
+      await KitchenOrder.findByIdAndRemove(orderId);
+    }
+    if (order) {
+      await KitchenOrder.deleteMany({ orderId: order._id });
+      await Order.findByIdAndRemove(order._id);
+    }
 
     // Agar stol bo'lsa va boshqa active order yo'q bo'lsa - stolni bo'shatish
     if (tableId) {
@@ -300,114 +320,145 @@ router.post("/delete-order/:id", cors(), async (req, res) => {
 
 // ============ ITEM O'CHIRISH ============
 
-// Order dan bitta itemni o'chirish
+// Order yoki KitchenOrder dan bitta itemni o'chirish
 router.delete("/orders/:orderId/items/:itemId", cors(), async (req, res) => {
   try {
     const { orderId, itemId } = req.params;
 
-    const order = await Order.findById(orderId);
+    // Avval Order dan qidirish
+    let order = await Order.findById(orderId);
+    let kitchenOrder = null;
+    let restaurantId = null;
+    let tableId = null;
+
+    // Agar Order topilmasa, KitchenOrder dan qidirish
     if (!order) {
+      kitchenOrder = await KitchenOrder.findById(orderId);
+      if (kitchenOrder) {
+        restaurantId = kitchenOrder.restaurantId;
+        tableId = kitchenOrder.tableId;
+        // Original Order ni olishga harakat qilish
+        if (kitchenOrder.orderId) {
+          order = await Order.findById(kitchenOrder.orderId);
+        }
+      }
+    } else {
+      restaurantId = order.restaurantId;
+      tableId = order.tableId;
+    }
+
+    if (!order && !kitchenOrder) {
       return res.status(404).json({ error: "Buyurtma topilmadi" });
     }
 
-    // selectFoods dan o'chirish
-    if (order.selectFoods && order.selectFoods.length > 0) {
-      order.selectFoods = order.selectFoods.filter(item =>
+    // KitchenOrder dan item o'chirish
+    if (kitchenOrder) {
+      kitchenOrder.items = kitchenOrder.items.filter(item =>
         item._id?.toString() !== itemId && item.foodId?.toString() !== itemId
       );
-    }
 
-    // allOrders dan o'chirish
-    if (order.allOrders && order.allOrders.length > 0) {
-      order.allOrders = order.allOrders.filter(item =>
-        item._id?.toString() !== itemId && item.foodId?.toString() !== itemId
-      );
-    }
+      // Agar barcha itemlar o'chirilgan bo'lsa - KitchenOrder ni o'chirish
+      if (kitchenOrder.items.length === 0) {
+        await KitchenOrder.findByIdAndRemove(orderId);
 
-    // Agar barcha itemlar o'chirilgan bo'lsa - orderni ham o'chirish
-    const remainingItems = order.selectFoods?.length || order.allOrders?.length || 0;
-    if (remainingItems === 0) {
-      // KitchenOrder larni o'chirish
-      await KitchenOrder.deleteMany({ orderId: orderId });
-      await Order.findByIdAndRemove(orderId);
-
-      // Stolni bo'shatish
-      if (order.tableId) {
-        const otherActiveOrders = await Order.countDocuments({
-          tableId: order.tableId,
-          status: { $nin: ["paid", "cancelled"] }
-        });
-
-        if (otherActiveOrders === 0) {
-          await Table.findByIdAndUpdate(order.tableId, { status: "free" });
-        }
-      }
-
-      // Socket orqali xabar berish
-      const io = req.app.get("io");
-      if (io && order.restaurantId) {
-        io.to(`restaurant_${order.restaurantId}`).emit("order_deleted", { orderId });
-        io.to(`cashier_${order.restaurantId}`).emit("order_deleted", { orderId });
-        io.to(`kitchen_${order.restaurantId}`).emit("order_deleted", { orderId });
-      }
-
-      return res.json({
-        success: true,
-        orderDeleted: true,
-        message: "Barcha itemlar o'chirilgani uchun buyurtma ham o'chirildi"
-      });
-    }
-
-    // Yangi summani hisoblash
-    const items = order.selectFoods || order.allOrders || [];
-    const newTotal = items.reduce((sum, item) => {
-      return sum + ((item.price || 0) * (item.quantity || item.count || 1));
-    }, 0);
-
-    order.totalPrice = newTotal;
-    await order.save();
-
-    // KitchenOrder ni ham yangilash
-    await KitchenOrder.updateMany(
-      { orderId: orderId },
-      {
-        items: items,
-        $pull: {
-          items: {
-            $or: [
-              { _id: itemId },
-              { foodId: itemId }
-            ]
+        // Agar Order ham bo'lsa va uning itemlari yo'q bo'lsa - Order ni ham o'chirish
+        if (order) {
+          const orderHasItems = (order.selectFoods?.length || 0) + (order.allOrders?.length || 0) > 0;
+          if (!orderHasItems) {
+            await Order.findByIdAndRemove(order._id);
           }
         }
+
+        // Stolni bo'shatish
+        if (tableId) {
+          const otherActiveOrders = await KitchenOrder.countDocuments({
+            tableId: tableId,
+            status: { $nin: ["paid", "cancelled", "served"] }
+          });
+
+          if (otherActiveOrders === 0) {
+            await Table.findByIdAndUpdate(tableId, { status: "free" });
+          }
+        }
+
+        // Socket orqali xabar berish
+        const io = req.app.get("io");
+        if (io && restaurantId) {
+          io.to(`restaurant_${restaurantId}`).emit("order_deleted", { orderId });
+          io.to(`cashier_${restaurantId}`).emit("order_deleted", { orderId });
+          io.to(`kitchen_${restaurantId}`).emit("order_deleted", { orderId });
+        }
+
+        return res.json({
+          success: true,
+          orderDeleted: true,
+          message: "Barcha itemlar o'chirilgani uchun buyurtma ham o'chirildi"
+        });
       }
-    );
+
+      await kitchenOrder.save();
+    }
+
+    // Order dan ham item o'chirish (agar mavjud bo'lsa)
+    if (order) {
+      // selectFoods dan o'chirish
+      if (order.selectFoods && order.selectFoods.length > 0) {
+        order.selectFoods = order.selectFoods.filter(item =>
+          item._id?.toString() !== itemId && item.foodId?.toString() !== itemId
+        );
+      }
+
+      // allOrders dan o'chirish
+      if (order.allOrders && order.allOrders.length > 0) {
+        order.allOrders = order.allOrders.filter(item =>
+          item._id?.toString() !== itemId && item.foodId?.toString() !== itemId
+        );
+      }
+
+      // Yangi summani hisoblash
+      const orderItems = order.selectFoods || order.allOrders || [];
+      const newTotal = orderItems.reduce((sum, item) => {
+        return sum + ((item.price || 0) * (item.quantity || item.count || 1));
+      }, 0);
+
+      order.totalPrice = newTotal;
+      await order.save();
+    }
+
+    // Qolgan itemlar soni va summa
+    const remainingItems = kitchenOrder
+      ? kitchenOrder.items.length
+      : (order?.selectFoods?.length || order?.allOrders?.length || 0);
+
+    const newTotal = kitchenOrder
+      ? kitchenOrder.items.reduce((sum, item) => sum + ((item.price || 0) * (item.quantity || 1)), 0)
+      : (order?.totalPrice || 0);
 
     // Socket orqali xabar berish
     const io = req.app.get("io");
-    if (io && order.restaurantId) {
-      io.to(`restaurant_${order.restaurantId}`).emit("order_item_deleted", {
+    if (io && restaurantId) {
+      io.to(`restaurant_${restaurantId}`).emit("order_item_deleted", {
         orderId,
         itemId,
         newTotal
       });
-      io.to(`cashier_${order.restaurantId}`).emit("order_item_deleted", {
+      io.to(`cashier_${restaurantId}`).emit("order_item_deleted", {
         orderId,
         itemId,
         newTotal
       });
-      io.to(`kitchen_${order.restaurantId}`).emit("order_item_deleted", {
+      io.to(`kitchen_${restaurantId}`).emit("order_item_deleted", {
         orderId,
         itemId
       });
     }
 
-    console.log(`Order ${orderId} dan item ${itemId} o'chirildi`);
+    console.log(`Order/KitchenOrder ${orderId} dan item ${itemId} o'chirildi`);
 
     res.json({
       success: true,
-      order,
-      remainingItems: items.length,
+      order: kitchenOrder || order,
+      remainingItems,
       newTotal
     });
   } catch (error) {
