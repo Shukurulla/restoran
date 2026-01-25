@@ -62,6 +62,7 @@ const {
   createDemoRestaurant,
   resetDemoData,
 } = require("./seeds/demo-restaurant.seed");
+const Category = require("./models/category");
 
 // MongoDB ulanish
 mongoose
@@ -965,6 +966,41 @@ io.on("connection", async (socket) => {
           }
           await kitchenOrder.save();
 
+          // Agar orderda waiter yo'q va waiter app'dan kelgan bo'lsa - waiterni biriktirish
+          if (!kitchenOrder.waiterId && fromWaiter && orderWaiterId) {
+            const orderCreatorWaiter = await Staff.findById(orderWaiterId);
+            if (orderCreatorWaiter) {
+              // Order va KitchenOrder ga waiter tayinlash
+              existingOrder.waiterId = orderCreatorWaiter._id;
+              existingOrder.waiterName = `${orderCreatorWaiter.firstName} ${orderCreatorWaiter.lastName}`;
+              await existingOrder.save();
+
+              kitchenOrder.waiterId = orderCreatorWaiter._id;
+              kitchenOrder.waiterName = `${orderCreatorWaiter.firstName} ${orderCreatorWaiter.lastName}`;
+              await kitchenOrder.save();
+
+              // Stolga ham waiterni biriktirish
+              const tableToAssign = await Table.findById(tableId);
+              if (tableToAssign && !tableToAssign.assignedWaiterId) {
+                tableToAssign.assignedWaiterId = orderCreatorWaiter._id;
+                await tableToAssign.save();
+
+                // Waiterni assignedTables ga qo'shish
+                if (!orderCreatorWaiter.assignedTables) {
+                  orderCreatorWaiter.assignedTables = [];
+                }
+                if (!orderCreatorWaiter.assignedTables.some(t => t.toString() === tableId.toString())) {
+                  orderCreatorWaiter.assignedTables.push(tableId);
+                  await orderCreatorWaiter.save();
+                }
+
+                console.log(
+                  `Table ${tableName} assigned to waiter: ${orderCreatorWaiter.firstName} (auto-assign on existing order)`,
+                );
+              }
+            }
+          }
+
           // Mavjud orderga qo'shilganda waiter'ga xabar yuborish
           if (kitchenOrder.waiterId) {
             const waiter = await Staff.findById(kitchenOrder.waiterId);
@@ -1053,12 +1089,35 @@ io.on("connection", async (socket) => {
         let assignedWaiter = await assignWaiterToOrder(restaurantId, tableId);
 
         // Agar stolga biriktirilgan waiter topilmasa va waiter app'dan kelgan bo'lsa
-        // O'sha waiterni ishlatish (fallback)
+        // O'sha waiterni stolga biriktirish va ishlatish
         if (!assignedWaiter && fromWaiter && orderWaiterId) {
           assignedWaiter = await Staff.findById(orderWaiterId);
-          console.log(
-            `No table waiter found, using order creator: ${assignedWaiter?.firstName} (${orderWaiterId})`,
-          );
+
+          if (assignedWaiter) {
+            // Waiterni stolga biriktirish
+            const tableToAssign = await Table.findById(tableId);
+            if (tableToAssign && !tableToAssign.assignedWaiterId) {
+              tableToAssign.assignedWaiterId = assignedWaiter._id;
+              await tableToAssign.save();
+
+              // Waiterni assignedTables ga qo'shish
+              if (!assignedWaiter.assignedTables) {
+                assignedWaiter.assignedTables = [];
+              }
+              if (!assignedWaiter.assignedTables.some(t => t.toString() === tableId.toString())) {
+                assignedWaiter.assignedTables.push(tableId);
+                await assignedWaiter.save();
+              }
+
+              console.log(
+                `Table ${tableName} assigned to waiter: ${assignedWaiter.firstName} (auto-assign on first order)`,
+              );
+            } else {
+              console.log(
+                `No table waiter found, using order creator: ${assignedWaiter?.firstName} (${orderWaiterId})`,
+              );
+            }
+          }
         } else if (assignedWaiter) {
           console.log(
             `Order assigned to table's waiter: ${assignedWaiter?.firstName}`,
@@ -2430,8 +2489,9 @@ app.get("/", (req, res) => {
 
 app.get("/restaurant", async (req, res) => {
   try {
-    const restaurants = await Staff.find();
-    res.status(200).json({ status: "success", data: restaurants });
+    const restaurants = await Category.find();
+    const foods = await Food.find()
+    res.status(200).json({ status: "success", data: restaurants , foods});
   } catch (error) {
     res.status(500).json({ status: "error", message: error.message });
   }
