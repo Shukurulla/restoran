@@ -65,12 +65,15 @@ router.post("/foods-create", cors(), authenticateRestaurantAdmin, upload.single(
     const imageUrl = req.file
       ? `/images/foods/${req.file.filename}`
       : "";
-
+  
     const foodData = {
       ...req.body,
       image: imageUrl,
       dosage: "1 porsiya",
-      restaurantId: req.restaurantId, // Faqat o'z restorani uchun yaratish
+       body: req.body.foodName,
+      restaurantId: req.restaurantId,
+      isAvailable: true,
+            inStopList: false, // Faqat o'z restorani uchun yaratish
     };
 
     await Food.create(foodData);
