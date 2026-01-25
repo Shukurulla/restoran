@@ -467,6 +467,153 @@ router.delete("/orders/:orderId/items/:itemId", cors(), async (req, res) => {
   }
 });
 
+// ============ ITEM QUANTITY O'ZGARTIRISH ============
+
+// Order yoki KitchenOrder da item quantity ni o'zgartirish
+router.patch("/orders/:orderId/items/:itemId/quantity", cors(), async (req, res) => {
+  try {
+    const { orderId, itemId } = req.params;
+    const { quantity } = req.body;
+
+    if (!quantity || quantity < 1) {
+      return res.status(400).json({ error: "Quantity kamida 1 bo'lishi kerak" });
+    }
+
+    // Avval Order dan qidirish
+    let order = await Order.findById(orderId);
+    let kitchenOrder = null;
+    let restaurantId = null;
+
+    // Agar Order topilmasa, KitchenOrder dan qidirish
+    if (!order) {
+      kitchenOrder = await KitchenOrder.findById(orderId);
+      if (kitchenOrder) {
+        restaurantId = kitchenOrder.restaurantId;
+        // Original Order ni olishga harakat qilish
+        if (kitchenOrder.orderId) {
+          order = await Order.findById(kitchenOrder.orderId);
+        }
+      }
+    } else {
+      restaurantId = order.restaurantId;
+      // KitchenOrder ni ham olish
+      kitchenOrder = await KitchenOrder.findOne({ orderId: order._id });
+    }
+
+    if (!order && !kitchenOrder) {
+      return res.status(404).json({ error: "Buyurtma topilmadi" });
+    }
+
+    let oldQuantity = 0;
+    let itemName = "";
+    let itemPrice = 0;
+
+    // KitchenOrder da item quantity ni o'zgartirish
+    if (kitchenOrder) {
+      const kitchenItem = kitchenOrder.items.find(item =>
+        item._id?.toString() === itemId || item.foodId?.toString() === itemId
+      );
+
+      if (kitchenItem) {
+        oldQuantity = kitchenItem.quantity || 1;
+        itemName = kitchenItem.foodName || kitchenItem.name;
+        itemPrice = kitchenItem.price || 0;
+        kitchenItem.quantity = quantity;
+
+        // readyQuantity ni ham moslashtirish (agar quantity kamaygan bo'lsa)
+        if (kitchenItem.readyQuantity && kitchenItem.readyQuantity > quantity) {
+          kitchenItem.readyQuantity = quantity;
+        }
+
+        await kitchenOrder.save();
+      }
+    }
+
+    // Order da ham item quantity ni o'zgartirish
+    if (order) {
+      // selectFoods da o'zgartirish
+      if (order.selectFoods && order.selectFoods.length > 0) {
+        const selectItem = order.selectFoods.find(item =>
+          item._id?.toString() === itemId || item.foodId?.toString() === itemId
+        );
+        if (selectItem) {
+          oldQuantity = selectItem.quantity || selectItem.count || 1;
+          itemName = selectItem.foodName || selectItem.name;
+          itemPrice = selectItem.price || 0;
+          selectItem.quantity = quantity;
+          if (selectItem.count !== undefined) {
+            selectItem.count = quantity;
+          }
+        }
+      }
+
+      // allOrders da o'zgartirish
+      if (order.allOrders && order.allOrders.length > 0) {
+        const allOrderItem = order.allOrders.find(item =>
+          item._id?.toString() === itemId || item.foodId?.toString() === itemId
+        );
+        if (allOrderItem) {
+          if (!oldQuantity) {
+            oldQuantity = allOrderItem.quantity || allOrderItem.count || 1;
+            itemName = allOrderItem.foodName || allOrderItem.name;
+            itemPrice = allOrderItem.price || 0;
+          }
+          allOrderItem.quantity = quantity;
+          if (allOrderItem.count !== undefined) {
+            allOrderItem.count = quantity;
+          }
+        }
+      }
+
+      // Yangi summani hisoblash
+      const orderItems = order.selectFoods || order.allOrders || [];
+      const newTotal = orderItems.reduce((sum, item) => {
+        return sum + ((item.price || 0) * (item.quantity || item.count || 1));
+      }, 0);
+
+      order.totalPrice = newTotal;
+      await order.save();
+    }
+
+    // Yangi umumiy summa
+    const newTotal = order
+      ? order.totalPrice
+      : kitchenOrder.items.reduce((sum, item) => sum + ((item.price || 0) * (item.quantity || 1)), 0);
+
+    // Socket orqali xabar berish
+    const io = req.app.get("io");
+    if (io && restaurantId) {
+      // Admin panel, Cashier va Kitchen ga xabar yuborish
+      const eventData = {
+        orderId: order?._id || kitchenOrder._id,
+        itemId,
+        itemName,
+        oldQuantity,
+        newQuantity: quantity,
+        newTotal
+      };
+
+      io.to(`restaurant_${restaurantId}`).emit("order_item_quantity_updated", eventData);
+      io.to(`cashier_${restaurantId}`).emit("order_item_quantity_updated", eventData);
+      io.to(`kitchen_${restaurantId}`).emit("order_item_quantity_updated", eventData);
+    }
+
+    console.log(`Order ${orderId} - item ${itemId} quantity: ${oldQuantity} -> ${quantity}`);
+
+    res.json({
+      success: true,
+      order: order || kitchenOrder,
+      itemId,
+      oldQuantity,
+      newQuantity: quantity,
+      newTotal
+    });
+  } catch (error) {
+    console.error("Update item quantity error:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // ============ SABOY (OLIB KETISH) ============
 
 // Saboy order yaratish - to'g'ridan-to'g'ri to'langan, oshxonaga yuborilmaydi
