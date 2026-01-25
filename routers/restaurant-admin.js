@@ -127,7 +127,7 @@ router.post(
   authenticateRestaurantAdmin,
   async (req, res) => {
     try {
-      const { firstName, lastName, phone, password, role, assignedCategories, salaryPercent } = req.body;
+      const { firstName, lastName, phone, password, role, assignedCategories, salaryPercent, doubleConfirmation, autoReady } = req.body;
 
       // Role validatsiya
       const validRoles = ["waiter", "cook", "cashier"];
@@ -155,9 +155,17 @@ router.post(
         role: staffRole,
       };
 
-      // Cook uchun - biriktirilgan categorylar
-      if (staffRole === "cook" && assignedCategories) {
-        staffData.assignedCategories = assignedCategories;
+      // Cook uchun - biriktirilgan categorylar va funksiyalar
+      if (staffRole === "cook") {
+        if (assignedCategories) {
+          staffData.assignedCategories = assignedCategories;
+        }
+        if (doubleConfirmation !== undefined) {
+          staffData.doubleConfirmation = doubleConfirmation;
+        }
+        if (autoReady !== undefined) {
+          staffData.autoReady = autoReady;
+        }
       }
 
       // Waiter uchun - ish haqi foizi
@@ -179,6 +187,8 @@ router.post(
           status: staff.status,
           assignedCategories: staff.assignedCategories,
           salaryPercent: staff.salaryPercent,
+          doubleConfirmation: staff.doubleConfirmation,
+          autoReady: staff.autoReady,
         },
       });
     } catch (error) {
@@ -199,7 +209,7 @@ router.put(
   authenticateRestaurantAdmin,
   async (req, res) => {
     try {
-      const { firstName, lastName, phone, password, assignedCategories, salaryPercent } = req.body;
+      const { firstName, lastName, phone, password, assignedCategories, salaryPercent, doubleConfirmation, autoReady } = req.body;
 
       const staff = await Staff.findOne({
         _id: req.params.staffId,
@@ -229,9 +239,17 @@ router.put(
         staff.password = password;
       }
 
-      // Cook uchun - biriktirilgan categorylar
-      if (staff.role === "cook" && assignedCategories !== undefined) {
-        staff.assignedCategories = assignedCategories;
+      // Cook uchun - biriktirilgan categorylar va funksiyalar
+      if (staff.role === "cook") {
+        if (assignedCategories !== undefined) {
+          staff.assignedCategories = assignedCategories;
+        }
+        if (doubleConfirmation !== undefined) {
+          staff.doubleConfirmation = doubleConfirmation;
+        }
+        if (autoReady !== undefined) {
+          staff.autoReady = autoReady;
+        }
       }
 
       // Waiter uchun - ish haqi foizi
@@ -253,6 +271,8 @@ router.put(
           status: savedStaff.status,
           assignedCategories: savedStaff.assignedCategories,
           salaryPercent: savedStaff.salaryPercent,
+          doubleConfirmation: savedStaff.doubleConfirmation,
+          autoReady: savedStaff.autoReady,
         },
       });
     } catch (error) {

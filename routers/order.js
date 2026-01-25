@@ -149,15 +149,32 @@ router.post("/orders/:orderId/pay", cors(), async (req, res) => {
 
     // 10% xizmat haqi
     const serviceFee = Math.round(itemsTotal * 0.1);
-    const grandTotal = itemsTotal + serviceFee;
+
+    // Soatlik haq hisoblash
+    let hourlyChargeTotal = 0;
+    if (order.occupancyStartedAt && order.tableId) {
+      const table = await Table.findById(order.tableId);
+      if (table && table.hasHourlyCharge && table.hourlyChargeAmount > 0) {
+        const now = new Date();
+        const startTime = new Date(order.occupancyStartedAt);
+        const hoursElapsed = (now - startTime) / (1000 * 60 * 60); // millisekunddan soatga
+        // Har bir boshlangan soat uchun haq olish (ceiling)
+        const billableHours = Math.ceil(hoursElapsed);
+        hourlyChargeTotal = billableHours * table.hourlyChargeAmount;
+        console.log(`Soatlik haq: ${billableHours} soat x ${table.hourlyChargeAmount} = ${hourlyChargeTotal} so'm`);
+      }
+    }
+
+    const grandTotal = itemsTotal + serviceFee + hourlyChargeTotal;
 
     // Order ni yangilash
     order.isPaid = true;
     order.paymentType = paymentType;
     order.paidAt = new Date();
     order.status = "paid";
-    order.totalPrice = grandTotal; // 10% xizmat haqi bilan
+    order.totalPrice = grandTotal; // 10% xizmat haqi + soatlik haq bilan
     order.ofitsianService = serviceFee;
+    order.hourlyChargeTotal = hourlyChargeTotal;
 
     // Bo'lingan to'lov (split payment)
     if (paymentSplit) {
@@ -183,7 +200,8 @@ router.post("/orders/:orderId/pay", cors(), async (req, res) => {
         paidAt: new Date(),
         paymentMethod: paymentType,
         status: "served",
-        allItemsReady: true
+        allItemsReady: true,
+        hourlyChargeTotal: hourlyChargeTotal
       }
     );
 
@@ -203,6 +221,9 @@ router.post("/orders/:orderId/pay", cors(), async (req, res) => {
         paymentType,
         paymentSplit,
         grandTotal,
+        hourlyChargeTotal,
+        itemsTotal,
+        serviceFee,
       });
 
       // Order completed event (barcha itemlar yetkazildi)

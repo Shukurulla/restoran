@@ -21,7 +21,7 @@ router.get("/tables", cors(), async (req, res) => {
 // Yangi stol yaratish
 router.post("/tables", cors(), async (req, res) => {
   try {
-    const { restaurantId, title, tableNumber, surcharge } = req.body;
+    const { restaurantId, title, tableNumber, surcharge, hasHourlyCharge, hourlyChargeAmount } = req.body;
 
     if (!restaurantId) {
       return res.status(400).json({ error: "restaurantId majburiy" });
@@ -32,6 +32,8 @@ router.post("/tables", cors(), async (req, res) => {
       title,
       tableNumber: tableNumber || 0,
       surcharge: surcharge || 0,
+      hasHourlyCharge: hasHourlyCharge || false,
+      hourlyChargeAmount: hourlyChargeAmount || 0,
     });
 
     const tables = await Table.find({ restaurantId }).sort({ tableNumber: 1 });

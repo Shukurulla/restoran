@@ -19,6 +19,16 @@ const tableSchema = mongoose.Schema(
       type: Number,
       required: true,
     },
+    // Kabina/stol uchun soatlik haq
+    hasHourlyCharge: {
+      type: Boolean,
+      default: false,
+    },
+    // Soatlik haq summasi (so'm)
+    hourlyChargeAmount: {
+      type: Number,
+      default: 0,
+    },
     // Stolga biriktirilgan waiter
     assignedWaiterId: {
       type: mongoose.Schema.Types.ObjectId,

@@ -66,6 +66,16 @@ const orderSchema = mongoose.Schema(
       type: Number,
       default: 0,
     },
+    // Soatlik haq uchun - stol band bo'lgan vaqt
+    occupancyStartedAt: {
+      type: Date,
+      default: null,
+    },
+    // Soatlik haq summasi (hisoblangan)
+    hourlyChargeTotal: {
+      type: Number,
+      default: 0,
+    },
     // Waiter tomonidan tasdiqlangan (mijoz orderini waiter tasdiqlashi kerak)
     waiterApproved: {
       type: Boolean,

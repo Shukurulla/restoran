@@ -206,6 +206,141 @@ async function assignWaiterToOrder(restaurantId, tableId) {
   return assignWaiterToTable(restaurantId, tableId);
 }
 
+// Helper function: Auto-ready - agar cook'ning autoReady=true bo'lsa, uning category'laridagi itemlarni avtomatik tayyor qilish
+async function processAutoReadyItems(io, kitchenOrder, restaurantId) {
+  try {
+    const Category = require("./models/category");
+
+    // autoReady=true bo'lgan cooklarni topish
+    const autoReadyCooks = await Staff.find({
+      restaurantId,
+      role: "cook",
+      status: "working",
+      autoReady: true,
+    });
+
+    if (autoReadyCooks.length === 0) {
+      return; // Hech qanday auto-ready cook yo'q
+    }
+
+    console.log(`Found ${autoReadyCooks.length} cooks with autoReady=true`);
+
+    // Har bir auto-ready cook'ning category'larini to'plash
+    const allAutoReadyCategoryIds = [];
+    for (const cook of autoReadyCooks) {
+      if (cook.assignedCategories && cook.assignedCategories.length > 0) {
+        allAutoReadyCategoryIds.push(...cook.assignedCategories);
+      }
+    }
+
+    if (allAutoReadyCategoryIds.length === 0) {
+      return; // Auto-ready cook'larda category yo'q
+    }
+
+    // Category ID'larni name'larga o'girish
+    const categories = await Category.find({
+      _id: { $in: allAutoReadyCategoryIds }
+    });
+    const autoReadyCategoryNames = categories.map(c => c.title.toLowerCase());
+
+    console.log("Auto-ready category names:", autoReadyCategoryNames);
+
+    // Kitchen order'dagi itemlarni tekshirish va avtomatik tayyor qilish
+    let itemsMarkedReady = false;
+    const readyItems = [];
+
+    for (let i = 0; i < kitchenOrder.items.length; i++) {
+      const item = kitchenOrder.items[i];
+
+      // Agar item'ning category'si auto-ready category'larga to'g'ri kelsa
+      if (item.category && autoReadyCategoryNames.includes(item.category.toLowerCase())) {
+        item.isReady = true;
+        item.readyQuantity = item.quantity;
+        item.readyAt = new Date();
+        if (item.addedAt) {
+          item.cookingTime = Math.floor((Date.now() - new Date(item.addedAt).getTime()) / 1000);
+        }
+        itemsMarkedReady = true;
+        readyItems.push({
+          foodName: item.foodName,
+          quantity: item.quantity,
+          isReady: true,
+        });
+        console.log(`Auto-ready: ${item.foodName} marked as ready`);
+      }
+    }
+
+    if (itemsMarkedReady) {
+      // Order statusini yangilash
+      const allReady = kitchenOrder.items.every((i) => i.isReady);
+      kitchenOrder.allItemsReady = allReady;
+
+      if (allReady) {
+        kitchenOrder.status = "ready";
+      } else if (kitchenOrder.items.some((i) => i.isReady)) {
+        kitchenOrder.status = "preparing";
+      }
+
+      await kitchenOrder.save();
+
+      // Waiter'ga notification yuborish
+      if (kitchenOrder.waiterId && readyItems.length > 0) {
+        const message = readyItems.length === 1
+          ? `${kitchenOrder.tableName}: ${readyItems[0].foodName} tayyor! (avto)`
+          : `${kitchenOrder.tableName}: ${readyItems.length} ta taom tayyor! (avto)`;
+
+        // WaiterNotification ga saqlash
+        let savedNotification = null;
+        try {
+          savedNotification = await WaiterNotification.create({
+            waiterId: kitchenOrder.waiterId,
+            restaurantId: kitchenOrder.restaurantId,
+            orderId: kitchenOrder._id,
+            type: "food_ready",
+            tableName: kitchenOrder.tableName,
+            tableNumber: kitchenOrder.tableNumber || 0,
+            message: message,
+            items: readyItems,
+          });
+        } catch (saveErr) {
+          console.error("WaiterNotification save error (auto-ready):", saveErr);
+        }
+
+        // Socket orqali waiter'ga xabar
+        io.to(`waiter_${kitchenOrder.waiterId}`).emit("order_ready_notification", {
+          notificationId: savedNotification ? savedNotification._id.toString() : null,
+          orderId: kitchenOrder._id.toString(),
+          tableName: kitchenOrder.tableName,
+          tableNumber: kitchenOrder.tableNumber || 0,
+          message: message,
+          items: readyItems,
+          allReady: allReady,
+          isAutoReady: true,
+        });
+
+        console.log(`Auto-ready notification sent to waiter_${kitchenOrder.waiterId}`);
+
+        // Push notification
+        const waiter = await Staff.findById(kitchenOrder.waiterId);
+        if (waiter && waiter.fcmToken) {
+          sendPushNotification(
+            waiter.fcmToken,
+            "Taom tayyor! (avto)",
+            message,
+            {
+              type: "food_ready",
+              orderId: kitchenOrder._id.toString(),
+              isAutoReady: "true",
+            }
+          );
+        }
+      }
+    }
+  } catch (error) {
+    console.error("Auto-ready processing error:", error);
+  }
+}
+
 // Helper function: Har bir oshpazga faqat uning category'lariga tegishli orderlarni yuborish
 async function emitFilteredKitchenOrders(
   io,
@@ -1076,6 +1211,12 @@ io.on("connection", async (socket) => {
       } else {
         // Yangi order yaratish
         isNewOrder = true;
+
+        // Stolning soatlik haq sozlamalarini olish
+        const tableForHourlyCharge = await Table.findById(tableId);
+        const hasHourlyCharge = tableForHourlyCharge?.hasHourlyCharge || false;
+        const occupancyStartedAt = hasHourlyCharge ? new Date() : null;
+
         order = await Order.create({
           restaurantId,
           sessionId: sessionObjectId,
@@ -1092,6 +1233,8 @@ io.on("connection", async (socket) => {
           // Agar mijozdan kelgan bo'lsa - tasdiqlanmagan
           waiterApproved: !needsWaiterApproval,
           approvedAt: needsWaiterApproval ? null : new Date(),
+          // Soatlik haq uchun
+          occupancyStartedAt: occupancyStartedAt,
         });
 
         // Ofitsiyantni tayinlash
@@ -1169,6 +1312,8 @@ io.on("connection", async (socket) => {
           // Agar mijozdan kelgan bo'lsa - tasdiqlanmagan
           waiterApproved: !needsWaiterApproval,
           approvedAt: needsWaiterApproval ? null : new Date(),
+          // Soatlik haq uchun
+          occupancyStartedAt: order.occupancyStartedAt,
         });
 
         // Ofitsiyantga xabar
@@ -1283,6 +1428,9 @@ io.on("connection", async (socket) => {
           ? `${tableName} dan yangi buyurtma keldi!`
           : `${tableName} ga yangi buyurtma qo'shildi!`,
       });
+
+      // Auto-ready: agar cook'ning autoReady=true bo'lsa, uning category'laridagi itemlarni avtomatik tayyor qilish
+      await processAutoReadyItems(io, kitchenOrder, restaurantId);
 
       // Oshpazlarga xabar - FAQAT TASDIQLANGAN ORDERLAR
       const kitchenOrders = await KitchenOrder.find({

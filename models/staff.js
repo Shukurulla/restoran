@@ -64,6 +64,16 @@ const staffSchema = mongoose.Schema(
         type: String,
       },
     ],
+    // Cook uchun - ikkilik tasdiqlash (birinchi bosishda qizil, ikkinchi bosishda tayyor)
+    doubleConfirmation: {
+      type: Boolean,
+      default: false,
+    },
+    // Cook uchun - avtomatik tayyor (biriktirilgan categorylar uchun avtomatik tayyor qilish)
+    autoReady: {
+      type: Boolean,
+      default: false,
+    },
     // Waiter uchun - ish haqi foizi (default 5%)
     salaryPercent: {
       type: Number,

@@ -245,6 +245,77 @@ router.patch(
       }
 
       const item = order.items[index];
+
+      // Cook'ning doubleConfirmation funksiyasini tekshirish
+      let cook = null;
+      let requiresDoubleConfirmation = false;
+      if (cookId) {
+        cook = await Staff.findById(cookId);
+        requiresDoubleConfirmation = cook && cook.doubleConfirmation === true;
+      }
+
+      // Ikkilik tasdiqlash logikasi
+      if (requiresDoubleConfirmation && !item.pendingConfirmation && !item.isReady) {
+        // Birinchi bosish - qizil holatga o'tkazish (pendingConfirmation)
+        item.pendingConfirmation = true;
+        await order.save();
+
+        // Barcha orderlarni qaytarish (cook uchun filter qilingan)
+        let orders = await KitchenOrder.find({
+          restaurantId: order.restaurantId,
+          status: { $in: ["pending", "preparing", "ready"] },
+          $or: [
+            { waiterApproved: true },
+            { waiterApproved: { $exists: false } }
+          ]
+        })
+          .sort({ createdAt: 1 })
+          .populate("waiterId");
+
+        // Cook'ga tegishli categorylarni filter qilish
+        if (cook && cook.assignedCategories && cook.assignedCategories.length > 0) {
+          const categories = await Category.find({
+            _id: { $in: cook.assignedCategories }
+          });
+          const categoryNames = categories.map(c => c.title.toLowerCase());
+
+          orders = orders.map(o => {
+            const orderObj = o.toObject ? o.toObject() : o;
+            const filteredItems = [];
+
+            (orderObj.items || []).forEach((itm, originalIdx) => {
+              if (itm.category && categoryNames.includes(itm.category.toLowerCase())) {
+                filteredItems.push({
+                  ...itm,
+                  originalIndex: originalIdx
+                });
+              }
+            });
+
+            if (filteredItems.length === 0) return null;
+            return { ...orderObj, items: filteredItems };
+          }).filter(o => o !== null);
+        }
+
+        return res.json({
+          data: orders,
+          updatedOrder: order,
+          pendingConfirmation: {
+            orderId: order._id,
+            itemIndex: index,
+            foodName: item.foodName,
+            message: "Tasdiqlash kutilmoqda - ikkinchi marta bosing",
+            requiresSecondClick: true
+          }
+        });
+      }
+
+      // Ikkinchi bosish (yoki doubleConfirmation=false)
+      // Agar pendingConfirmation=true bo'lsa, uni false qilish
+      if (item.pendingConfirmation) {
+        item.pendingConfirmation = false;
+      }
+
       const currentReadyQuantity = item.readyQuantity || 0;
       const newReadyQuantity = currentReadyQuantity + readyCount;
 

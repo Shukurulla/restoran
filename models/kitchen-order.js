@@ -26,6 +26,11 @@ const kitchenOrderItemSchema = new mongoose.Schema({
     type: Boolean,
     default: false,
   },
+  // Ikkilik tasdiqlash uchun - birinchi bosishda qizil (kutish holati)
+  pendingConfirmation: {
+    type: Boolean,
+    default: false,
+  },
   // Qisman tayyor - nechta tayyor bo'lgani
   readyQuantity: {
     type: Number,
@@ -114,6 +119,16 @@ const kitchenOrderSchema = new mongoose.Schema(
       type: String,
       enum: ['cash', 'card', 'click', 'debt'],
       default: 'cash',
+    },
+    // Soatlik haq uchun - stol band bo'lgan vaqt
+    occupancyStartedAt: {
+      type: Date,
+      default: null,
+    },
+    // Soatlik haq summasi (hisoblangan)
+    hourlyChargeTotal: {
+      type: Number,
+      default: 0,
     },
     debtInfo: {
       customerName: String,
