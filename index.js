@@ -1084,44 +1084,55 @@ io.on("connection", async (socket) => {
         });
 
         // Ofitsiyantni tayinlash
-        // MUHIM: Order DOIM stolga biriktirilgan waiterga borishi kerak
-        // Hatto boshqa waiter order bersa ham, stolga biriktirilgan waiterga boradi
-        let assignedWaiter = await assignWaiterToOrder(restaurantId, tableId);
+        // YANGI MANTIQ: Agar waiter order bersa va stolga waiter biriktirilmagan bo'lsa
+        // Shu waiterni stolga biriktirish
+        let assignedWaiter = null;
+        const tableForAssignment = await Table.findById(tableId);
 
-        // Agar stolga biriktirilgan waiter topilmasa va waiter app'dan kelgan bo'lsa
-        // O'sha waiterni stolga biriktirish va ishlatish
+        // 1. Avval stolga biriktirilgan waiterni tekshirish
+        if (tableForAssignment && tableForAssignment.assignedWaiterId) {
+          assignedWaiter = await Staff.findById(tableForAssignment.assignedWaiterId);
+          if (assignedWaiter) {
+            console.log(
+              `Order assigned to table's existing waiter: ${assignedWaiter.firstName}`,
+            );
+          }
+        }
+
+        // 2. Agar stolga waiter biriktirilmagan va order waiterdan kelgan bo'lsa
+        // Shu waiterni stolga biriktirish
         if (!assignedWaiter && fromWaiter && orderWaiterId) {
           assignedWaiter = await Staff.findById(orderWaiterId);
 
-          if (assignedWaiter) {
+          if (assignedWaiter && tableForAssignment) {
             // Waiterni stolga biriktirish
-            const tableToAssign = await Table.findById(tableId);
-            if (tableToAssign && !tableToAssign.assignedWaiterId) {
-              tableToAssign.assignedWaiterId = assignedWaiter._id;
-              await tableToAssign.save();
+            tableForAssignment.assignedWaiterId = assignedWaiter._id;
+            tableForAssignment.status = "occupied";
+            await tableForAssignment.save();
 
-              // Waiterni assignedTables ga qo'shish
-              if (!assignedWaiter.assignedTables) {
-                assignedWaiter.assignedTables = [];
-              }
-              if (!assignedWaiter.assignedTables.some(t => t.toString() === tableId.toString())) {
-                assignedWaiter.assignedTables.push(tableId);
-                await assignedWaiter.save();
-              }
-
-              console.log(
-                `Table ${tableName} assigned to waiter: ${assignedWaiter.firstName} (auto-assign on first order)`,
-              );
-            } else {
-              console.log(
-                `No table waiter found, using order creator: ${assignedWaiter?.firstName} (${orderWaiterId})`,
-              );
+            // Waiterni assignedTables ga qo'shish
+            if (!assignedWaiter.assignedTables) {
+              assignedWaiter.assignedTables = [];
             }
+            if (!assignedWaiter.assignedTables.some(t => t.toString() === tableId.toString())) {
+              assignedWaiter.assignedTables.push(tableId);
+              await assignedWaiter.save();
+            }
+
+            console.log(
+              `Table ${tableName} AUTO-ASSIGNED to waiter: ${assignedWaiter.firstName} ${assignedWaiter.lastName} (first order)`,
+            );
           }
-        } else if (assignedWaiter) {
-          console.log(
-            `Order assigned to table's waiter: ${assignedWaiter?.firstName}`,
-          );
+        }
+
+        // 3. Agar hali ham waiter yo'q (mijozdan kelgan), fallback ishlatish
+        if (!assignedWaiter) {
+          assignedWaiter = await assignWaiterToOrder(restaurantId, tableId);
+          if (assignedWaiter) {
+            console.log(
+              `Order assigned to fallback waiter: ${assignedWaiter.firstName}`,
+            );
+          }
         }
 
         // Order'ga waiter ma'lumotlarini qo'shish
